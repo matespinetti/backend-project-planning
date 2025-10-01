@@ -1,0 +1,83 @@
+{
+  "titulo": "Construcción de Escuela Primaria",
+  "descripcion": "Proyecto para construir una escuela primaria en zona rural con capacidad para 200 estudiantes",
+  "tipo": "Infraestructura Educativa",
+  "pais": "Argentina",
+  "provincia": "Buenos Aires",
+  "ciudad": "La Plata",
+  "barrio": "Villa Elvira",
+  "etapas": [
+    {
+      "nombre": "Planificación y Diseño",
+      "descripcion": "Diseño arquitectónico y obtención de permisos de construcción",
+      "fecha_inicio": "2024-01-01",
+      "fecha_fin": "2024-03-31",
+      "pedidos": [
+        {
+          "tipo": "economico",
+          "descripcion": "Honorarios profesionales de arquitectos",
+          "monto": 500000,
+          "moneda": "ARS"
+        },
+        {
+          "tipo": "economico",
+          "descripcion": "Tasas municipales y permisos",
+          "monto": 150000,
+          "moneda": "ARS"
+        }
+      ]
+    },
+    {
+      "nombre": "Construcción Fase 1",
+      "descripcion": "Construcción de cimientos y estructura principal",
+      "fecha_inicio": "2024-04-01",
+      "fecha_fin": "2024-08-31",
+      "pedidos": [
+        {
+          "tipo": "materiales",
+          "descripcion": "Cemento para cimientos",
+          "cantidad": 500,
+          "unidad": "bolsas"
+        },
+        {
+          "tipo": "materiales",
+          "descripcion": "Hierro de construcción",
+          "cantidad": 5000,
+          "unidad": "kg"
+        },
+        {
+          "tipo": "mano_obra",
+          "descripcion": "Albañiles especializados",
+          "cantidad": 10,
+          "unidad": "personas"
+        }
+      ]
+    },
+    {
+      "nombre": "Construcción Fase 2",
+      "descripcion": "Terminaciones, instalaciones eléctricas y sanitarias",
+      "fecha_inicio": "2024-09-01",
+      "fecha_fin": "2024-12-31",
+      "pedidos": [
+        {
+          "tipo": "economico",
+          "descripcion": "Instalaciones eléctricas completas",
+          "monto": 800000,
+          "moneda": "ARS"
+        },
+        {
+          "tipo": "materiales",
+          "descripcion": "Pintura para paredes",
+          "cantidad": 200,
+          "unidad": "litros"
+        },
+        {
+          "tipo": "mano_obra",
+          "descripcion": "Electricistas certificados",
+          "cantidad": 3,
+          "unidad": "personas"
+        }
+      ]
+    }
+  ]
+}
