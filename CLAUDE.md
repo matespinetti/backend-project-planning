@@ -1,214 +1,384 @@
-ProjectPlanning FastAPI Backend - ENTREGA 1 & 2
-Project Overview
-You are building a FastAPI backend that serves as middleware between a Next.js frontend and Bonita BPM. This initial version focuses on project creation which will start a Bonita process instance.
-Current Scope (ENTREGA 1 & 2):
+# ProjectPlanning FastAPI Proxy API - ENTREGA 2
 
-Single endpoint: POST /api/v1/projects
-Create project with nested etapas and pedidos
-Store in PostgreSQL database
-Initialize Bonita process instance
-Return project data with Bonita process information
+## Project Overview
+You are building a **FastAPI Proxy API** that serves as an orchestration layer between a Next.js frontend, Bonita BPM, and a Cloud Persistence API. This API does **NOT** persist data locally - it coordinates between external services following microservices architecture patterns.
 
-Tech Stack
+### Current Scope (ENTREGA 2):
 
-Framework: FastAPI
-Package Manager: uv (modern Python package manager)
-Server: Uvicorn
-Database: PostgreSQL
-ORM: SQLAlchemy 2.0
-Validation: Pydantic v2
-HTTP Client: httpx (for Bonita API calls)
-Deployment: Docker ready
+- **POST /api/v1/projects** - Create project and orchestrate Bonita + Cloud API
+- **GET /api/v1/projects/{project_id}** - Proxy GET requests to Cloud API
+- **No local database** - All persistence handled by Cloud API
+- **Bonita BPM integration** - Start and manage process instances
+- **Microservices pattern** - Coordinate between distributed services
 
-Folder Structure
+## Architecture
+
+```
+┌─────────────┐
+│  Next.js    │
+│  Frontend   │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────────┐
+│  FastAPI Proxy API  │  ◄── This API (no database)
+│  (Orchestration)    │
+└──────┬──────┬───────┘
+       │      │
+       ▼      ▼
+┌──────────┐ ┌────────────────────┐
+│ Bonita   │ │  Cloud API         │
+│ BPM      │ │  (Hostinger/Render)│
+│          │ │  - PostgreSQL      │
+│          │ │  - Data Persistence│
+└──────────┘ └────────────────────┘
+```
+
+### Data Flow
+
+**Creating a Project (Cloud API First):**
+1. Frontend → Proxy API: Send proyecto data
+2. Proxy API → Cloud API: POST - Persist proyecto (get real UUID, no Bonita info yet)
+3. Proxy API → Bonita BPM: Start process with real project UUID
+4. **If Bonita fails** → Proxy API → Cloud API: DELETE - Rollback project
+5. **If Bonita succeeds** → Proxy API → Cloud API: PATCH - Update with Bonita case_id
+6. Proxy API → Frontend: Return combined response
+
+**Reading a Project:**
+1. Frontend → Proxy API: Request proyecto by ID
+2. Proxy API → Cloud API: Forward GET request
+3. Proxy API → Frontend: Return proyecto data
+
+## Tech Stack
+
+- **Framework:** FastAPI
+- **Package Manager:** uv (modern Python package manager)
+- **Server:** Uvicorn
+- **Validation:** Pydantic v2
+- **HTTP Client:** httpx (for Bonita & Cloud API calls)
+- **Deployment:** Docker ready (no database container)
+
+## Folder Structure
+
+```
 project-planning-api/
-├── pyproject.toml # uv configuration with dependencies
+├── pyproject.toml              # uv configuration with dependencies
 ├── uv.lock
 ├── Dockerfile
-├── docker-compose.yml # PostgreSQL + API
+├── docker-compose.yml          # API only (no PostgreSQL)
 ├── .env.example
 ├── .env
 ├── README.md
+├── CLAUDE.md                   # This file
 │
 ├── app/
-│ ├── **init**.py
-│ ├── main.py # FastAPI app initialization, CORS, routes
-│ ├── config.py # Pydantic Settings for environment variables
-│ │
-│ ├── api/
-│ │ ├── **init**.py
-│ │ └── v1/
-│ │ ├── **init**.py
-│ │ ├── router.py # Main API router
-│ │ └── endpoints/
-│ │ ├── **init**.py
-│ │ └── projects.py # POST /api/v1/projects endpoint
-│ │
-│ ├── core/
-│ │ ├── **init**.py
-│ │ └── bonita.py # Bonita BPM client class
-│ │
-│ ├── models/ # SQLAlchemy ORM models
-│ │ ├── **init**.py
-│ │ ├── proyecto.py # Proyecto table with Bonita tracking
-│ │ ├── etapa.py # Etapa table (stages)
-│ │ └── pedido.py # Pedido table (coverage requests)
-│ │
-│ ├── schemas/ # Pydantic schemas (request/response)
-│ │ ├── **init**.py
-│ │ ├── proyecto.py # ProyectoCreate, ProyectoResponse
-│ │ ├── etapa.py # EtapaCreate, EtapaResponse
-│ │ └── pedido.py # PedidoCreate, PedidoResponse
-│ │
-│ ├── crud/ # Database operations
-│ │ ├── **init**.py
-│ │ └── proyecto.py # CRUD operations for projects
-│ │
-│ └── db/
-│ ├── **init**.py
-│ ├── base.py # SQLAlchemy Base class
-│ ├── session.py # Database session management
-│ └── init_db.py # Create tables on startup
+│   ├── __init__.py
+│   ├── main.py                 # FastAPI app initialization, CORS, routes
+│   ├── config.py               # Pydantic Settings for environment variables
+│   │
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── v1/
+│   │       ├── __init__.py
+│   │       ├── router.py       # Main API router
+│   │       └── endpoints/
+│   │           ├── __init__.py
+│   │           └── projects.py # POST & GET /api/v1/projects endpoints
+│   │
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── bonita.py           # Bonita BPM client class
+│   │   └── cloud_client.py     # Cloud Persistence API client
+│   │
+│   └── schemas/                # Pydantic schemas (request/response)
+│       ├── __init__.py
+│       ├── proyecto.py         # ProyectoCreate, ProyectoResponse
+│       ├── etapa.py            # EtapaCreate, EtapaResponse
+│       └── pedido.py           # PedidoCreate, PedidoResponse
 │
 └── tests/
-├── **init**.py
-├── conftest.py
-└── test_projects.py
-Core Requirements
+    ├── __init__.py
+    ├── conftest.py
+    └── test_projects.py
+```
 
-1. Data Schema Matching
-   The API must accept data that exactly matches the Next.js Zod schema structure:
-   From Next.js Frontend:
-   typescript{
-   titulo: string (min 5 chars),
-   descripcion: string (min 20 chars),
-   tipo: string (min 1 char),
-   pais: string,
-   provincia: string,
-   ciudad: string,
-   barrio?: string,
-   etapas: [
-   {
-   nombre: string (min 3 chars),
-   descripcion: string (min 10 chars),
-   fecha_inicio: string (ISO date),
-   fecha_fin: string (ISO date),
-   pedidos: [
-   {
-   tipo: string (economico|materiales|mano_obra),
-   descripcion: string (min 5 chars),
-   monto?: number,
-   moneda?: string,
-   cantidad?: number,
-   unidad?: string
-   }
-   ]
-   }
-   ]
-   }
-   Key Points:
+**Note:** No `app/db/`, `app/models/`, or `app/crud/` directories - all database operations are handled by the Cloud API.
 
-All IDs (proyecto, etapa, pedido) are auto-generated UUIDs by the database
-Dates come as ISO strings, convert to Python date objects
-Validate fecha_fin >= fecha_inicio in Pydantic
-monto and cantidad must be positive when present
-Etapas array must have at least 1 element
+## Core Requirements
 
-2. Database Design
-   Tables:
+### 1. Data Schema Matching
 
-proyectos - Main project table with Bonita tracking fields
-etapas - Project stages (one-to-many with proyectos)
-pedidos - Coverage requests (one-to-many with etapas)
+The API must accept data that exactly matches the Next.js Zod schema structure:
 
-Important Fields:
-
-All tables use UUID primary keys (auto-generated with uuid.uuid4())
-proyectos.id - UUID primary key
-proyectos.bonita_case_id - Store Bonita case ID (string)
-proyectos.bonita_process_instance_id - Store process instance ID (integer)
-proyectos.estado - Enum: borrador, en_planificacion, buscando_financiamiento, completo, en_ejecucion
-etapas.id - UUID primary key
-etapas.proyecto_id - UUID foreign key to proyectos
-pedidos.id - UUID primary key
-pedidos.etapa_id - UUID foreign key to etapas
-
-Relationships:
-
-Use SQLAlchemy relationships with back_populates
-Cascade deletes: delete project → delete etapas → delete pedidos
-Use from_attributes = True in Pydantic for ORM mode
-Use PostgreSQL UUID type (PGUUID with as_uuid=True)
-
-3. Bonita BPM Integration
-   Bonita REST API Flow:
-
-Login - POST /loginservice to get JSESSIONID cookie
-Get Process Definition - GET /API/bpm/process?p=0&c=100&f=name={process_name}
-Start Process - POST /API/bpm/process/{processId}/instantiation
-Set Variables (if needed) - PUT /API/bpm/caseVariable/{caseId}/{variableName}
-
-BonitaClient Class Must:
-
-Handle authentication and session management
-Store session cookie for subsequent requests
-Find process definition by name (e.g., "ProjectPlanning")
-Start process instance with initial variables
-Return case ID and process instance ID
-Handle errors gracefully (log and raise appropriate exceptions)
-
-Variables to Send to Bonita:
-python{
-"titulo": proyecto.titulo,
-"descripcion": proyecto.descripcion,
-"tipo": proyecto.tipo,
-"pais": proyecto.pais,
-"num_etapas": len(proyecto.etapas),
-"proyecto_id": proyecto.id # DB ID for reference
-} 4. API Endpoint Behavior
-POST /api/v1/projects
-Request Flow:
-
-Receive JSON payload from Next.js
-Validate with Pydantic (ProyectoCreate schema)
-Start database transaction
-Create Proyecto record (estado = "en_planificacion")
-Create Etapa records (convert ISO strings to dates)
-Create Pedido records for each etapa
-Commit transaction
-Initialize Bonita process with project data
-Update proyecto with bonita_case_id and bonita_process_instance_id
-Return full proyecto with nested etapas/pedidos + Bonita info
-
-Response Format:
-json{
-"proyecto": {
-"id": 1,
-"titulo": "...",
-"descripcion": "...",
-"bonita_case_id": "...",
-"estado": "en_planificacion",
-"fecha_creacion": "...",
-"etapas": [...]
-},
-"bonita_case_id": "...",
-"bonita_process_url": "http://bonita:8080/bonita/portal/...",
-"message": "Proyecto creado exitosamente e iniciado en Bonita"
+**From Next.js Frontend:**
+```typescript
+{
+  titulo: string (min 5 chars),
+  descripcion: string (min 20 chars),
+  tipo: string (min 1 char),
+  pais: string,
+  provincia: string,
+  ciudad: string,
+  barrio?: string,
+  etapas: [
+    {
+      nombre: string (min 3 chars),
+      descripcion: string (min 10 chars),
+      fecha_inicio: string (ISO date),
+      fecha_fin: string (ISO date),
+      pedidos: [
+        {
+          tipo: string (economico|materiales|mano_obra|transporte|equipamiento),
+          descripcion: string (min 5 chars),
+          monto?: number,
+          moneda?: string,
+          cantidad?: number,
+          unidad?: string
+        }
+      ]
+    }
+  ]
 }
-Error Handling:
+```
 
-422: Validation errors (from Pydantic)
-500: Database errors or Bonita connection failures
-Always rollback database transaction if Bonita fails
-Return detailed error messages for debugging
+**Key Points:**
+- All IDs (proyecto, etapa, pedido) are auto-generated UUIDs by the **Cloud API**
+- Dates come as ISO strings from frontend
+- Validate `fecha_fin >= fecha_inicio` in Pydantic
+- `monto` and `cantidad` must be positive when present
+- `etapas` array must have at least 1 element
 
-5. Configuration (Environment Variables)
-   Required in .env:
-   env# Database
-   DATABASE_URL=postgresql://user:password@localhost:5432/projectplanning
+### 2. Cloud Persistence API Contract
+
+**POST /api/v1/projects (to Cloud API)**
+
+Request (Initial creation, before Bonita):
+```json
+{
+  "titulo": "...",
+  "descripcion": "...",
+  "tipo": "...",
+  "pais": "...",
+  "provincia": "...",
+  "ciudad": "...",
+  "barrio": "...",
+  "bonita_case_id": null,
+  "bonita_process_instance_id": null,
+  "estado": "en_planificacion",
+  "etapas": [...]
+}
+```
+
+Note: `bonita_case_id` and `bonita_process_instance_id` are `null` during initial creation since Bonita process hasn't started yet.
+
+Response (201 Created):
+```json
+{
+  "id": "uuid",
+  "titulo": "...",
+  "descripcion": "...",
+  "tipo": "...",
+  "pais": "...",
+  "provincia": "...",
+  "ciudad": "...",
+  "barrio": "...",
+  "estado": "en_planificacion",
+  "bonita_case_id": "12345",
+  "bonita_process_instance_id": 67890,
+  "fecha_creacion": "2024-01-01T12:00:00",
+  "fecha_actualizacion": "2024-01-01T12:00:00",
+  "etapas": [
+    {
+      "id": "uuid",
+      "proyecto_id": "uuid",
+      "nombre": "...",
+      "descripcion": "...",
+      "fecha_inicio": "2024-01-01",
+      "fecha_fin": "2024-12-31",
+      "pedidos": [
+        {
+          "id": "uuid",
+          "etapa_id": "uuid",
+          "tipo": "economico",
+          "descripcion": "...",
+          "monto": 1000.0,
+          "moneda": "USD",
+          "cantidad": null,
+          "unidad": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+**GET /api/v1/projects/{project_id} (from Cloud API)**
+
+Response (200 OK):
+```json
+{
+  "id": "uuid",
+  "titulo": "...",
+  // ... same structure as POST response
+}
+```
+
+Response (404 Not Found):
+```json
+{
+  "detail": "Proyecto with id {project_id} not found"
+}
+```
+
+**DELETE /api/v1/projects/{project_id} (from Cloud API)**
+
+Used for rollback when Bonita process fails to start.
+
+Response (204 No Content or 200 OK):
+```
+(Empty body - successful deletion)
+```
+
+Response (404 Not Found):
+```json
+{
+  "detail": "Proyecto with id {project_id} not found"
+}
+```
+
+Note: 404 is treated as success for rollback purposes (project doesn't exist = rollback successful).
+
+**PATCH /api/v1/projects/{project_id} (to Cloud API)**
+
+Used to update project with Bonita information after process starts successfully.
+
+Request (Partial update):
+```json
+{
+  "bonita_case_id": "12345",
+  "bonita_process_instance_id": 67890
+}
+```
+
+Response (200 OK):
+```json
+{
+  "id": "uuid",
+  "titulo": "...",
+  "bonita_case_id": "12345",
+  "bonita_process_instance_id": 67890,
+  // ... rest of project data
+}
+```
+
+Note: This is called AFTER Bonita succeeds to save the case_id in the database for future reference.
+
+### 3. Bonita BPM Integration
+
+**Bonita REST API Flow:**
+1. Login - `POST /loginservice` to get JSESSIONID cookie
+2. Get Process Definition - `GET /API/bpm/process?p=0&c=100&f=name={process_name}`
+3. Start Process - `POST /API/bpm/process/{processId}/instantiation`
+4. Set Variables (if needed) - `PUT /API/bpm/caseVariable/{caseId}/{variableName}`
+
+**BonitaClient Class Must:**
+- Handle authentication and session management
+- Store session cookie for subsequent requests
+- Find process definition by name (e.g., "ProjectPlanning")
+- Start process instance with contract inputs
+- Return case ID and process instance ID
+- Handle errors gracefully (log and raise appropriate exceptions)
+
+**Contract Inputs for Process Start:**
+```python
+{
+    "project_id": "real-uuid-from-cloud-api"  # Real UUID from Cloud API
+}
+```
+
+### 4. Cloud API Client
+
+**CloudAPIClient Class:**
+- Located in `app/core/cloud_client.py`
+- Uses `httpx.AsyncClient` for HTTP requests
+- Configurable timeout (default: 30s)
+- Methods:
+  - `create_project()` - POST to Cloud API with proyecto data (Bonita params optional)
+  - `get_project()` - GET proyecto by ID from Cloud API
+  - `delete_project()` - DELETE proyecto by ID (used for rollback)
+  - `update_project_bonita_info()` - PATCH proyecto with Bonita case_id and process_instance_id
+- Proper error handling and logging
+- Async context manager support
+
+**Key Features:**
+- Sends full proyecto data to Cloud API (initially without Bonita info)
+- Returns persisted proyecto with database-generated UUIDs
+- Updates proyecto with Bonita info after process starts
+- Supports rollback by deleting projects
+- Handles network errors, timeouts, and HTTP errors
+- Structured logging for debugging
+
+### 5. API Endpoint Behavior
+
+**POST /api/v1/projects**
+
+Request Flow (Cloud API First, Then Bonita, Then Update):
+1. Receive JSON payload from Next.js
+2. Validate with Pydantic (ProyectoCreate schema)
+3. **POST to Cloud API** → Get real project UUID (no Bonita info yet)
+4. If Cloud API fails → Return 500, nothing to rollback
+5. **Start Bonita BPM process** with real project UUID
+6. If Bonita fails → **Rollback**: DELETE project from Cloud API
+7. If rollback succeeds → Return 500 "Project was rolled back"
+8. If rollback fails → Return 500 with project_id for manual cleanup
+9. **PATCH Cloud API** → Update project with Bonita case_id and process_instance_id
+10. If update fails → Log warning but continue (project exists, Bonita running)
+11. Return combined response with all information
+
+Response Format (201 Created):
+```json
+{
+  "proyecto": {
+    "id": "uuid",
+    "titulo": "...",
+    "descripcion": "...",
+    "bonita_case_id": "12345",
+    "estado": "en_planificacion",
+    "fecha_creacion": "...",
+    "etapas": [...]
+  },
+  "bonita_case_id": "12345",
+  "bonita_process_url": "http://bonita:8080/bonita/portal/...",
+  "message": "Proyecto creado exitosamente e iniciado en Bonita"
+}
+```
+
+**GET /api/v1/projects/{project_id}**
+
+Request Flow:
+1. Receive project_id from request path
+2. Forward GET request to Cloud API
+3. If Cloud API returns 404 → Return 404
+4. If Cloud API returns 200 → Return proyecto data
+5. If Cloud API errors → Return 500
+
+**Error Handling:**
+- **422:** Validation errors (from Pydantic)
+- **500:** Bonita connection failures, Cloud API failures
+- **404:** Project not found in Cloud API (GET endpoint only)
+
+Always log errors with full context for debugging and operations.
+
+### 6. Configuration (Environment Variables)
+
+Required in `.env`:
+
+```env
+# Cloud Persistence API (hosted on Hostinger/Render)
+CLOUD_API_URL=https://your-cloud-api.example.com
+CLOUD_API_TIMEOUT=30
 
 # Bonita BPM
-
 BONITA_URL=http://localhost:8080/bonita
 BONITA_USERNAME=walter.bates
 BONITA_PASSWORD=bpm
@@ -216,333 +386,229 @@ BONITA_PROCESS_NAME=ProjectPlanning
 BONITA_PROCESS_VERSION=1.0
 
 # API Settings
-
 API_V1_PREFIX=/api/v1
-PROJECT_NAME=ProjectPlanning API
+PROJECT_NAME=ProjectPlanning Proxy API
 
-# CORS
+# CORS - comma separated list of origins
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+```
 
-ALLOWED_ORIGINS=["http://localhost:3000"]
-Use Pydantic Settings:
+**Use Pydantic Settings:**
+- Create `Settings` class that reads from environment
+- Validate required variables on startup
+- Use `@lru_cache` to create singleton settings instance
 
-Create Settings class that reads from environment
-Validate required variables on startup
-Use @lru_cache to create singleton settings instance
+### 7. Development Setup
 
-6. Development Setup
-   Dependencies to include in pyproject.toml:
-   tomldependencies = [
-   "fastapi>=0.115.0",
-   "uvicorn[standard]>=0.30.0",
-   "sqlalchemy>=2.0.0",
-   "psycopg2-binary>=2.9.0", # PostgreSQL driver
-   "pydantic>=2.0.0",
-   "pydantic-settings>=2.0.0",
-   "httpx>=0.27.0", # Async HTTP client for Bonita
-   "python-dotenv>=1.0.0",
-   ]
-   Commands:
-   bash# Install with uv
-   uv sync
+**Dependencies in `pyproject.toml`:**
+```toml
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+]
+```
+
+**Commands:**
+```bash
+# Install with uv
+uv sync
 
 # Run dev server with auto-reload
-
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Access API docs
+http://localhost:8000/docs
+```
 
-http://localhost:8000/docs 7. Docker Deployment
-docker-compose.yml must include:
+### 8. Docker Deployment
 
-PostgreSQL service (persist data with volumes)
-FastAPI service (depends on postgres)
-Network configuration for services
-Environment variables passed correctly
-Health checks for postgres
+**docker-compose.yml** includes:
+- FastAPI proxy service only (no PostgreSQL)
+- Environment variables for Cloud API and Bonita
+- Network configuration
+- Restart policy
 
-Dockerfile must:
+**Dockerfile must:**
+- Use Python 3.11+ slim image
+- Install uv
+- Copy and install dependencies first (layer caching)
+- Copy application code
+- Expose port 8000
+- Run with uvicorn
 
-Use Python 3.11+ slim image
-Install uv
-Copy and install dependencies first (layer caching)
-Copy application code
-Expose port 8000
-Run with uvicorn
+**Note:** No database migrations or initialization needed - this is a stateless proxy API.
 
-Key Implementation Notes
-Date Handling
+## Key Implementation Notes
 
-Frontend sends: "2024-10-15" (ISO string)
-Pydantic receives: string field
-Convert to Python date object before storing in DB
-Use datetime.fromisoformat() for conversion
+### Microservices Error Handling
 
-UUID Handling
+**Bonita Fails:**
+- Return 500 to frontend immediately
+- Don't call Cloud API (no process to persist)
+- Log error with full context
 
-All IDs are auto-generated UUIDs by the database (uuid.uuid4())
-Use PostgreSQL UUID type with sqlalchemy.dialects.postgresql.UUID
-Set as_uuid=True to work with Python's uuid.UUID objects
-No need for frontend to send IDs - backend generates them automatically
+**Bonita Succeeds, Cloud API Fails:**
+- Log error with Bonita case_id
+- Return 500 with message including case_id for manual recovery
+- Operations team can manually persist data using case_id
 
-Nested Object Creation
+**Both Succeed:**
+- Return 201 with full response
+- Log success with both IDs
 
-Use SQLAlchemy relationships for automatic cascade
-Create proyecto first (UUID auto-generated), then etapas with proyecto_id (UUID), then pedidos with etapa_id (UUID)
-Let SQLAlchemy handle the relationship population
-UUIDs are returned in the response for frontend tracking
+**Network Timeouts:**
+- 20s timeout for Bonita (configured in BonitaClient)
+- 30s timeout for Cloud API (configurable via env var)
+- Proper error messages for each service
 
-Bonita Session Management
+### Logging Strategy
 
-Bonita sessions expire after inactivity
-Login before each process operation (or implement session caching)
-Handle 401 responses by re-authenticating
+**Structured Logging:**
+- Log all external service calls (Bonita, Cloud API)
+- Include request/response summaries for debugging
+- Log latency for performance monitoring
+- Clear error messages with context
 
-CORS Configuration
+**Example Log Messages:**
+```python
+logger.info(f"Starting Bonita process for proyecto: {proyecto_data.titulo}")
+logger.info(f"Bonita process started. Case ID: {bonita_case_id}")
+logger.info("Forwarding proyecto data to Cloud Persistence API")
+logger.error(f"Cloud API persistence failed for Bonita case {bonita_case_id}")
+```
 
-Allow Next.js origin (localhost:3000 in dev)
-Allow credentials if needed for future auth
-Configure for production domains later
+### Service Orchestration Pattern
 
-Testing Strategy
-Manual Testing with Swagger UI:
+This API follows the **Orchestrator Pattern** where:
+1. **Orchestrator** (this API) coordinates multiple services
+2. **Services** (Bonita, Cloud API) are independent and decoupled
+3. **Failure handling** is explicit and traceable
+4. **Idempotency** considerations for retry logic (future enhancement)
 
-Use /docs endpoint for interactive testing
-Test validation errors (missing fields, invalid dates)
-Test database persistence
-Verify Bonita process starts correctly
+### Date Handling
 
-Key Test Cases:
+- Frontend sends: `"2024-10-15"` (ISO string)
+- Pydantic receives: string field
+- Cloud API handles conversion to database types
+- Proxy API validates format but doesn't convert
 
-Create project with 1 etapa, 1 pedido
-Create project with multiple etapas, multiple pedidos per etapa
-Test fecha_fin < fecha_inicio (should fail validation)
-Test missing required fields (should return 422)
-Test Bonita unavailable (should rollback DB changes)
+### UUID Handling
 
-Success Criteria for ENTREGA 1 & 2
-✅ Modelo de proceso Bonita - Process definition exists in Bonita
-✅ Formulario web - Next.js form sends correctly formatted data
-✅ API funcional - POST /api/v1/projects accepts data, stores in DB
-✅ Integración Bonita - API starts process instance via Bonita API
-✅ Variables seteadas - Project data passed to Bonita as variables
-✅ Documentación - Swagger docs accessible and accurate
-✅ Docker ready - Can run with docker-compose
+- Cloud API generates all UUIDs (proyecto, etapa, pedido)
+- Proxy API generates temporary UUID for Bonita contract (will be replaced)
+- Use Python's `uuid.uuid4()` for temporary IDs
+- Cloud API returns real UUIDs in response
 
+### CORS Configuration
 
-Common Pitfalls to Avoid
+- Allow Next.js origin (localhost:3000 in dev)
+- Allow credentials if needed for future auth
+- Configure for production domains later
+
+## Testing Strategy
+
+**Manual Testing with Swagger UI:**
+- Use `/docs` endpoint for interactive testing
+- Test validation errors (missing fields, invalid dates)
+- Test Bonita integration (verify process starts)
+- Test Cloud API integration (verify data persists)
+
+**Key Test Cases:**
+1. Create project with 1 etapa, 1 pedido
+2. Create project with multiple etapas, multiple pedidos per etapa
+3. Test `fecha_fin < fecha_inicio` (should fail validation)
+4. Test missing required fields (should return 422)
+5. Test Bonita unavailable (should return 500)
+6. Test Cloud API unavailable (should return 500 with Bonita case_id)
+7. Test GET endpoint with valid ID
+8. Test GET endpoint with non-existent ID (should return 404)
+
+## Success Criteria for ENTREGA 2
+
+✅ API acts as pure proxy (no local database)
+✅ Bonita process starts correctly
+✅ Cloud API receives full proyecto data
+✅ Response includes both Bonita and Cloud API info
+✅ All database dependencies removed
+✅ Docker setup simplified (no PostgreSQL)
+✅ Error handling follows microservices best practices
+✅ Documentation updated completely
+✅ GET endpoint proxies to Cloud API
+✅ Proper logging and observability
+
+## Common Pitfalls to Avoid
+
 ❌ Don't forget to handle Bonita authentication properly
 ❌ Don't skip validation - use Pydantic validators
 ❌ Don't hardcode URLs or credentials - use environment variables
-❌ Don't commit database transaction BEFORE calling Bonita - commit AFTER Bonita succeeds
 ❌ Don't forget CORS configuration - Next.js won't connect otherwise
 ❌ Don't skip error handling - log errors and return meaningful messages
-❌ Don't forget to import UUID types from sqlalchemy.dialects.postgresql and uuid module
+❌ Don't forget to close httpx clients (use context managers)
+❌ Don't ignore Cloud API errors - always log with Bonita case_id for recovery
+❌ Don't start Bonita process before validation - validate first
 
 ---
 
-# Database Migrations with Alembic
+## Future Enhancements (Post-ENTREGA 2)
 
-The project uses **Alembic** for database schema migrations to support future functionality additions.
+- **Authentication:** Add JWT tokens or API keys for security
+- **Retry Logic:** Implement exponential backoff for failed Cloud API calls
+- **Circuit Breaker:** Protect against cascading failures
+- **Rate Limiting:** Protect against abuse
+- **Caching:** Cache frequently accessed proyectos from Cloud API
+- **Webhooks:** Receive updates from Bonita when process state changes
+- **Metrics:** Prometheus metrics for service health monitoring
+- **Tracing:** Distributed tracing with OpenTelemetry
 
-## Architecture
+---
 
-- **Async-compatible**: Alembic is configured to work with SQLAlchemy async engine
-- **Auto-detection**: Can auto-generate migrations from model changes
-- **Version control**: Migrations tracked in `alembic/versions/`
-- **Environment-based**: Reads DATABASE_URL from `.env` file
+## Architecture Decision Records
 
-## Configuration Files
+### ADR-001: Why Proxy Pattern Instead of Database?
 
-### `alembic.ini`
-- Main Alembic configuration
-- Database URL is overridden by `alembic/env.py` (reads from `.env`)
+**Context:** Original design had local PostgreSQL database. Requirements changed to use cloud-hosted persistence API.
 
-### `alembic/env.py`
-- Configured for async SQLAlchemy
-- Imports all models from `app.models`
-- Uses `async_engine_from_config` for async migrations
-- Converts `postgresql://` → `postgresql+asyncpg://` automatically
+**Decision:** Convert to pure proxy API that orchestrates between Bonita and Cloud API.
 
-## Common Commands
+**Rationale:**
+- **Separation of Concerns:** This API focuses on BPM integration, Cloud API handles persistence
+- **Scalability:** Stateless proxy can scale horizontally without database concerns
+- **Simplicity:** Fewer dependencies, easier deployment
+- **Cost:** No database infrastructure to maintain
+- **Flexibility:** Can swap Cloud API implementation without changing this proxy
 
-### Create a new migration (auto-generate from model changes)
-```bash
-uv run alembic revision --autogenerate -m "Add new field to proyecto"
-```
+**Consequences:**
+- ✅ Simpler deployment (no database migrations)
+- ✅ Better separation of concerns
+- ✅ Easier to test (mock external services)
+- ⚠️ Depends on Cloud API availability
+- ⚠️ Network latency for every operation
 
-### Create an empty migration (for manual SQL)
-```bash
-uv run alembic revision -m "Add custom index"
-```
+### ADR-002: Cloud API First, Then Bonita (REVISED)
 
-### Apply migrations (upgrade to latest)
-```bash
-uv run alembic upgrade head
-```
+**Context:** Need to decide order of service calls. Originally chose Bonita first, but requirement changed: Bonita needs real project UUID from database.
 
-### Rollback one migration
-```bash
-uv run alembic downgrade -1
-```
+**Decision:** Persist in Cloud API first (get real UUID), then start Bonita process with that UUID.
 
-### Show current migration status
-```bash
-uv run alembic current
-```
+**Rationale:**
+- Bonita process requires the real project ID from the database
+- Cloud API is easier to rollback (simple DELETE operation)
+- If Bonita fails, we can cleanly delete the project from Cloud API
+- Database is the source of truth for project IDs
+- Rollback is straightforward and reliable
 
-### Show migration history
-```bash
-uv run alembic history
-```
+**Consequences:**
+- ✅ Bonita receives real project UUID (not temporary ID)
+- ✅ Clean rollback mechanism (DELETE from Cloud API)
+- ✅ Database is source of truth for IDs
+- ✅ No orphaned Bonita processes without corresponding data
+- ⚠️ Project briefly exists in Cloud API before Bonita starts
+- ⚠️ If rollback fails, manual cleanup needed (rare, but logged)
 
-### Rollback to specific revision
-```bash
-uv run alembic downgrade <revision_id>
-```
+---
 
-## Migration Workflow for New Features
-
-1. **Modify models** in `app/models/`
-   ```python
-   # Example: Add new field to Proyecto model
-   class Proyecto(Base):
-       # ... existing fields ...
-       presupuesto_total: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-   ```
-
-2. **Generate migration**
-   ```bash
-   uv run alembic revision --autogenerate -m "Add presupuesto_total to proyectos"
-   ```
-
-3. **Review generated migration** in `alembic/versions/`
-   - Check that the `upgrade()` function is correct
-   - Check that the `downgrade()` function reverses changes properly
-
-4. **Test migration locally**
-   ```bash
-   # Apply migration
-   uv run alembic upgrade head
-
-   # Test rollback
-   uv run alembic downgrade -1
-
-   # Re-apply
-   uv run alembic upgrade head
-   ```
-
-5. **Commit migration file** to version control
-   ```bash
-   git add alembic/versions/xxxxx_add_presupuesto_total_to_proyectos.py
-   git commit -m "Add presupuesto_total field to proyectos table"
-   ```
-
-## Initial Setup (Already Done)
-
-The initial migration (`e33c335d25f7`) creates:
-- `proyectos` table with Bonita tracking fields
-- `etapas` table with FK to proyectos
-- `pedidos` table with FK to etapas
-- PostgreSQL ENUM types: `EstadoProyecto`, `TipoPedido`
-
-## Important Notes
-
-### Transaction Handling
-- Migrations run in a transaction by default
-- If migration fails, changes are rolled back automatically
-- Test migrations in development before deploying to production
-
-### Async Considerations
-- The `env.py` file uses `asyncio.run()` to run async migrations
-- Works seamlessly with async SQLAlchemy engine
-- No changes needed for standard migration operations
-
-### Production Deployment
-```bash
-# In production, run migrations before starting the app
-uv run alembic upgrade head && uv run uvicorn app.main:app
-```
-
-### Docker Integration
-Add to Dockerfile or docker-compose startup script:
-```bash
-# Run migrations on container startup
-uv run alembic upgrade head
-```
-
-### Common Migration Patterns
-
-#### Adding a nullable field
-```python
-def upgrade() -> None:
-    op.add_column('proyectos', sa.Column('new_field', sa.String(100), nullable=True))
-
-def downgrade() -> None:
-    op.drop_column('proyectos', 'new_field')
-```
-
-#### Adding a required field (with default)
-```python
-def upgrade() -> None:
-    # Add as nullable first
-    op.add_column('proyectos', sa.Column('status', sa.String(50), nullable=True))
-    # Set default value for existing rows
-    op.execute("UPDATE proyectos SET status = 'active' WHERE status IS NULL")
-    # Make it not nullable
-    op.alter_column('proyectos', 'status', nullable=False)
-
-def downgrade() -> None:
-    op.drop_column('proyectos', 'status')
-```
-
-#### Creating an index
-```python
-def upgrade() -> None:
-    op.create_index('ix_proyectos_titulo', 'proyectos', ['titulo'])
-
-def downgrade() -> None:
-    op.drop_index('ix_proyectos_titulo')
-```
-
-#### Adding a new ENUM value
-```python
-def upgrade() -> None:
-    # PostgreSQL requires special handling for enum updates
-    op.execute("ALTER TYPE estadoproyecto ADD VALUE 'cancelado'")
-
-def downgrade() -> None:
-    # WARNING: Removing enum values is complex in PostgreSQL
-    # Usually requires recreating the enum type
-    pass  # Document manual rollback if needed
-```
-
-## Troubleshooting
-
-### "Target database is not up to date"
-```bash
-# Check current version
-uv run alembic current
-
-# Apply pending migrations
-uv run alembic upgrade head
-```
-
-### "Can't locate revision identified by 'xxxxx'"
-- Make sure all migration files are committed to git
-- Check that `alembic/versions/` directory is not in `.gitignore`
-
-### Migration conflicts (multiple developers)
-```bash
-# If two developers create migrations from same base:
-# Use alembic merge to create a merge migration
-uv run alembic merge -m "Merge migrations" <rev1> <rev2>
-```
-
-### Reset database (DEVELOPMENT ONLY - destroys data)
-```bash
-# Downgrade to base (remove all tables)
-uv run alembic downgrade base
-
-# Re-apply all migrations
-uv run alembic upgrade head
-```
+**End of Documentation**

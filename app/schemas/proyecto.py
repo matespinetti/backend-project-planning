@@ -33,7 +33,7 @@ class ProyectoCreate(BaseModel):
 
 
 class ProyectoResponse(BaseModel):
-    """Schema for proyecto response."""
+    """Schema for proyecto response (from Cloud API)."""
 
     model_config = {"from_attributes": True}
 
