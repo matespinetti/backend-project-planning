@@ -7,8 +7,9 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
-    # Database
-    DATABASE_URL: str
+    # Cloud Persistence API
+    CLOUD_API_URL: str
+    CLOUD_API_TIMEOUT: int = 30  # seconds
 
     # Bonita BPM
     BONITA_URL: str
@@ -19,7 +20,7 @@ class Settings(BaseSettings):
 
     # API Settings
     API_V1_PREFIX: str = "/api/v1"
-    PROJECT_NAME: str = "ProjectPlanning API"
+    PROJECT_NAME: str = "ProjectPlanning Proxy API"
 
     # CORS
     ALLOWED_ORIGINS: str = "http://localhost:3000"

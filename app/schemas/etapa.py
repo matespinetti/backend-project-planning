@@ -9,6 +9,8 @@ from app.schemas.pedido import PedidoCreate, PedidoResponse
 class EtapaCreate(BaseModel):
     """Schema for creating an etapa (project stage)."""
 
+    model_config = {"extra": "ignore"}
+
     nombre: str = Field(..., min_length=3, description="Stage name")
     descripcion: str = Field(..., min_length=10, description="Stage description")
     fecha_inicio: str = Field(..., description="Start date (ISO format)")
@@ -42,7 +44,7 @@ class EtapaCreate(BaseModel):
 
 
 class EtapaResponse(BaseModel):
-    """Schema for etapa response."""
+    """Schema for etapa response (from Cloud API)."""
 
     model_config = {"from_attributes": True}
 

@@ -40,14 +40,12 @@ def test_create_project_valid_data(client: TestClient):
         "barrio": "Centro",
         "etapas": [
             {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
                 "nombre": "Etapa 1",
                 "descripcion": "Descripción de la etapa 1",
                 "fecha_inicio": "2024-01-01",
                 "fecha_fin": "2024-06-30",
                 "pedidos": [
                     {
-                        "id": "550e8400-e29b-41d4-a716-446655440001",
                         "tipo": "economico",
                         "descripcion": "Financiamiento inicial",
                         "monto": 10000.0,

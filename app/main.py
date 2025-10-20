@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.config import get_settings
-from app.db.init_db import init_db
 
 # Configure logging
 logging.basicConfig(
@@ -24,22 +23,22 @@ async def lifespan(app: FastAPI):
     Lifespan context manager for startup and shutdown events.
     """
     # Startup
-    logger.info("Starting up ProjectPlanning API...")
-    logger.info("Initializing database tables...")
-    await init_db()
-    logger.info("Database initialization complete")
+    logger.info("Starting up ProjectPlanning Proxy API...")
+    logger.info("Proxy API ready - no local database initialization needed")
+    logger.info(f"Cloud API URL: {settings.CLOUD_API_URL}")
+    logger.info(f"Bonita URL: {settings.BONITA_URL}")
 
     yield
 
     # Shutdown
-    logger.info("Shutting down ProjectPlanning API...")
+    logger.info("Shutting down ProjectPlanning Proxy API...")
 
 
 # Create FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    version="1.0.0",
-    description="FastAPI backend for ProjectPlanning - middleware between Next.js and Bonita BPM",
+    version="2.0.0",
+    description="FastAPI Proxy API - Orchestrates between Next.js frontend, Bonita BPM, and Cloud Persistence API",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url=None,
@@ -63,8 +62,13 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 async def root():
     """Root endpoint - health check."""
     return {
-        "message": "ProjectPlanning API is running",
-        "version": "1.0.0",
+        "message": "ProjectPlanning Proxy API is running",
+        "version": "2.0.0",
+        "mode": "proxy",
+        "services": {
+            "bonita": settings.BONITA_URL,
+            "cloud_api": settings.CLOUD_API_URL,
+        },
         "docs_url": "/docs",
     }
 
@@ -72,4 +76,4 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy"}
+    return {"status": "healthy", "mode": "proxy"}
