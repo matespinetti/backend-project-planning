@@ -1,0 +1,6 @@
+- Install deps: `uv sync` (requires uv CLI installed per README instructions).
+- Run API dev server: `uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`.
+- Run API prod-like: `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000` (adjust workers as needed).
+- Execute tests: `uv run pytest` (pytest + pytest-asyncio configured).
+- Docker workflow: `docker-compose up --build` (or `-d`), `docker-compose logs -f api`, `docker-compose down`.
+- Copy env template: `cp .env.example .env` then edit values for Cloud API + Bonita + CORS.

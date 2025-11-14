@@ -1,7 +1,8 @@
 from datetime import datetime
-from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.etapa import EtapaCreate, EtapaResponse
 
@@ -48,8 +49,8 @@ class ProyectoResponse(BaseModel):
     estado: str
     bonita_case_id: Optional[str] = None
     bonita_process_instance_id: Optional[int] = None
-    fecha_creacion: datetime
-    fecha_actualizacion: datetime
+    created_at: datetime
+    updated_at: datetime
     etapas: List[EtapaResponse] = []
 
 
@@ -60,3 +61,31 @@ class ProyectoCreateResponse(BaseModel):
     bonita_case_id: Optional[str] = None
     bonita_process_url: Optional[str] = None
     message: str
+
+
+class ProyectoListItem(BaseModel):
+    """Summary schema returned by the list endpoint."""
+
+    id: UUID
+    titulo: str
+    descripcion: str
+    tipo: str
+    estado: str
+    pais: str
+    provincia: str
+    ciudad: str
+    barrio: Optional[str] = None
+    bonita_case_id: Optional[str] = None
+    bonita_process_instance_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PaginatedProyectoResponse(BaseModel):
+    """Paginated response metadata for project listings."""
+
+    items: List[ProyectoListItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

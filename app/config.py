@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     # Cloud Persistence API
     CLOUD_API_URL: str
     CLOUD_API_TIMEOUT: int = 30  # seconds
+    CLOUD_API_JWT_SECRET: str
+    CLOUD_API_JWT_ALGORITHM: str = "HS256"
 
     # Bonita BPM
     BONITA_URL: str

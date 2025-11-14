@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -38,8 +39,12 @@ class PedidoResponse(BaseModel):
     id: UUID
     tipo: str
     descripcion: str
+    estado: str
     monto: Optional[float] = None
     moneda: Optional[str] = None
     cantidad: Optional[int] = None
     unidad: Optional[str] = None
     etapa_id: UUID
+    proyecto_id: Optional[UUID] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

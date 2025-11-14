@@ -1,0 +1,7 @@
+- Follow `AGENTS.md` mandates: keep code stateless, only proxy/orchestrate; keep business logic in external services.
+- Python 3.12+ with FastAPI; use `from __future__ import annotations`, strict typing, and fully async paths.
+- Separate concerns: dedicated clients (`BonitaClient`, `CloudAPIClient`) in `app/core`; routers under `app/api/v1` thinly delegate to clients.
+- Use Pydantic v2 models for all request/response validation; leverage `pydantic-settings` for configuration.
+- Error handling: surface 422 for validation, 404 for proxied not found, 500 for orchestration/external failures; log full context.
+- No persistence layer, ORM, or user/auth subsystems inside this service; reuse JWT from Cloud API and forward tokens downstream.
+- Keep folder structure tidy per `AGENTS.md`; prefer clean, self-explanatory async functions with minimal comments unless clarifying orchestration flows.

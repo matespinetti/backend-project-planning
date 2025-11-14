@@ -1,7 +1,8 @@
-from datetime import date
-from pydantic import BaseModel, Field, field_validator
-from typing import List
+from datetime import date, datetime
+from typing import List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.pedido import PedidoCreate, PedidoResponse
 
@@ -55,3 +56,28 @@ class EtapaResponse(BaseModel):
     fecha_fin: date
     proyecto_id: UUID
     pedidos: List[PedidoResponse] = []
+
+
+class EtapaListItem(BaseModel):
+    """Schema for etapa list item with pedido counts."""
+
+    model_config = {"from_attributes": True}
+
+    id: UUID
+    proyecto_id: UUID
+    nombre: str
+    descripcion: str
+    fecha_inicio: date
+    fecha_fin: date
+    estado: str
+    fecha_completitud: Optional[datetime] = None
+    pedidos: List[PedidoResponse] = []
+    pedidos_pendientes_count: int = 0
+    pedidos_total_count: int = 0
+
+
+class EtapasListResponse(BaseModel):
+    """Schema for list response of etapas."""
+
+    etapas: List[EtapaListItem]
+    total: int

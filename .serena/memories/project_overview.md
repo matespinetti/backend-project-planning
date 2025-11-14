@@ -1,0 +1,6 @@
+- FastAPI proxy/orchestration API that sits between a Next.js frontend, the Cloud Persistence API (JWT auth + PostgreSQL), and Bonita BPM.
+- API is strictly stateless: no DB/ORM, no user management; only validates requests, forwards them, and orchestrates workflows (e.g., project creation, retrieval).
+- Core folders: `app/main.py` (FastAPI app + wiring), `app/config.py` (pydantic-settings), `app/api/v1` (routers/endpoints), `app/core` (HTTP clients for Bonita + Cloud API), `app/schemas` (Pydantic data models), `tests/` (pytest suite).
+- Dependencies managed with `uv`; runtime stack: FastAPI, Uvicorn, Pydantic v2, httpx (async), pydantic-settings, python-dotenv. Pytest + pytest-asyncio for tests.
+- Key docs: `README.md` (setup/run), `AGENTS.md` (architecture + constraints), `CLOUD_API_DOCUMENTATION.md` (cloud API contract), `CLAUDE.md` (architecture guide).
+- Docker support via `docker-compose.yml`/`Dockerfile`; `.env` config drives Cloud API + Bonita endpoints, credentials, and CORS origins.

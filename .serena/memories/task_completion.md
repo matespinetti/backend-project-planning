@@ -1,0 +1,5 @@
+- Ensure any new endpoints/clients remain stateless proxies and respect `AGENTS.md` rules; verify orchestrations cover Cloud API + Bonita expectations.
+- Re-run `uv run pytest` (and any relevant async/unit tests) before handing work back; add new tests for new flows when feasible.
+- If behavior affects deployment/config, update `.env.example`, README, or docs (e.g., CLOUD_API_DOCUMENTATION.md) accordingly.
+- Confirm FastAPI app still starts locally via `uv run uvicorn app.main:app --reload` when necessary.
+- Keep Docker assets (`docker-compose.yml`, `Dockerfile`) in sync if env vars or settings change.
