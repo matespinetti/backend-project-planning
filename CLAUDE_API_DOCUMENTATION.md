@@ -12,16 +12,20 @@
 3. [Introducción](#introducción)
 4. [Autenticación](#autenticación)
 5. [Endpoints de Autenticación](#endpoints-de-autenticación)
-6. [Endpoints de Proyectos](#endpoints-de-proyectos)
-7. [Endpoints de Etapas](#endpoints-de-etapas)
-8. [Endpoints de Pedidos](#endpoints-de-pedidos)
-9. [Endpoints de Ofertas](#endpoints-de-ofertas)
-10. [Endpoints de Observaciones](#endpoints-de-observaciones)
-11. [Endpoints de Métricas](#endpoints-de-métricas)
-12. [Enumeraciones](#enumeraciones)
-13. [Flujo Completo de Ejemplo](#flujo-completo-de-ejemplo)
-14. [Códigos de Error](#códigos-de-error)
-15. [Instrucciones para Pruebas](#instrucciones-para-pruebas)
+6. [Endpoints de Usuarios](#endpoints-de-usuarios)
+7. [Endpoints de Proyectos](#endpoints-de-proyectos)
+8. [Endpoints de Etapas](#endpoints-de-etapas)
+9. [Endpoints de Pedidos](#endpoints-de-pedidos)
+10. [Endpoints de Pedidos - Nuevas Operaciones](#endpoints-de-pedidos---nuevas-operaciones)
+11. [Endpoints de Ofertas](#endpoints-de-ofertas)
+12. [Endpoints de Ofertas - Nuevas Operaciones](#endpoints-de-ofertas---nuevas-operaciones)
+13. [Endpoints de Etapas - Nuevas Operaciones](#endpoints-de-etapas---nuevas-operaciones)
+14. [Endpoints de Observaciones](#endpoints-de-observaciones)
+15. [Endpoints de Métricas](#endpoints-de-métricas)
+16. [Enumeraciones](#enumeraciones)
+17. [Flujo Completo de Ejemplo](#flujo-completo-de-ejemplo)
+18. [Códigos de Error](#códigos-de-error)
+19. [Instrucciones para Pruebas](#instrucciones-para-pruebas)
 
 ---
 
@@ -2019,6 +2023,171 @@ curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/ofertas/mis-
 
 ---
 
+### 7️⃣ Listar Todas Mis Ofertas
+
+Obtiene todas las ofertas que el usuario autenticado ha creado, en cualquier estado (pendientes, aceptadas, rechazadas). Permite ver el progreso de tus ofertas y cuáles están esperando respuesta.
+
+**Método:** `GET`
+**Ruta:** `/api/v1/ofertas/mis-ofertas`
+**Autenticación:** Requerida (Bearer Token)
+**Código de Respuesta:** `200 OK`
+
+#### Query Parameters (Opcionales)
+
+| Parámetro       | Tipo | Descripción                                                  |
+| --------------- | ---- | ------------------------------------------------------------ |
+| `estado_oferta` | enum | Filtrar por estado de la oferta: `pendiente`, `aceptada` o `rechazada` |
+
+#### Ejemplos de Ruta
+
+```
+GET /api/v1/ofertas/mis-ofertas
+GET /api/v1/ofertas/mis-ofertas?estado_oferta=pendiente
+GET /api/v1/ofertas/mis-ofertas?estado_oferta=aceptada
+GET /api/v1/ofertas/mis-ofertas?estado_oferta=rechazada
+```
+
+#### Response Exitoso (200)
+
+Estructura con información anidada del pedido y etapa:
+
+```json
+[
+	{
+		"id": "523e4567-e89b-12d3-a456-426614174444",
+		"pedido_id": "423e4567-e89b-12d3-a456-426614174333",
+		"user_id": "550e8400-e29b-41d4-a716-446655440001",
+		"descripcion": "Tengo disponibilidad inmediata para realizar trabajos de pintura con materiales de primera calidad...",
+		"monto_ofrecido": 14500.0,
+		"estado": "pendiente",
+		"created_at": "2024-10-22T15:00:00+00:00",
+		"updated_at": "2024-10-22T15:00:00+00:00",
+		"pedido": {
+			"id": "423e4567-e89b-12d3-a456-426614174333",
+			"tipo": "economico",
+			"descripcion": "Presupuesto para pintura de las paredes interiores",
+			"estado": "PENDIENTE",
+			"monto": 15000.0,
+			"moneda": "ARS",
+			"cantidad": null,
+			"unidad": null,
+			"etapa": {
+				"id": "223e4567-e89b-12d3-a456-426614174111",
+				"nombre": "Fase 1: Diseño",
+				"estado": "pendiente"
+			}
+		}
+	},
+	{
+		"id": "523e4567-e89b-12d3-a456-426614174445",
+		"pedido_id": "423e4567-e89b-12d3-a456-426614174334",
+		"user_id": "550e8400-e29b-41d4-a716-446655440001",
+		"descripcion": "Puedo suministrar cemento de primera calidad. Entrega garantizada en 10 días...",
+		"monto_ofrecido": 8500.0,
+		"estado": "aceptada",
+		"created_at": "2024-10-20T12:00:00+00:00",
+		"updated_at": "2024-10-21T10:30:00+00:00",
+		"pedido": {
+			"id": "423e4567-e89b-12d3-a456-426614174334",
+			"tipo": "materiales",
+			"descripcion": "Materiales para construcción de piso",
+			"estado": "COMPROMETIDO",
+			"monto": 9000.0,
+			"moneda": "ARS",
+			"cantidad": 50,
+			"unidad": "bolsas",
+			"etapa": {
+				"id": "223e4567-e89b-12d3-a456-426614174222",
+				"nombre": "Fase 2: Construcción",
+				"estado": "financiada"
+			}
+		}
+	}
+]
+```
+
+#### Estructura del Response
+
+**OfertaDetailedResponse:**
+
+| Campo           | Tipo                    | Descripción                                          |
+| --------------- | ----------------------- | ---------------------------------------------------- |
+| `id`            | UUID                    | ID de la oferta                                      |
+| `pedido_id`     | UUID                    | ID del pedido                                        |
+| `user_id`       | UUID                    | ID del usuario que creó la oferta                    |
+| `descripcion`   | string                  | Descripción de la oferta                             |
+| `monto_ofrecido`| float (nullable)        | Monto ofrecido                                       |
+| `estado`        | string                  | Estado: pendiente, aceptada o rechazada              |
+| `created_at`    | datetime                | Fecha de creación                                    |
+| `updated_at`    | datetime                | Fecha de última actualización                        |
+| `pedido`        | PedidoDetailedInfo      | **Información anidada del pedido (ver debajo)**      |
+
+**PedidoDetailedInfo:**
+
+| Campo        | Tipo                 | Descripción                        |
+| ------------ | -------------------- | ---------------------------------- |
+| `id`         | UUID                 | ID del pedido                      |
+| `tipo`       | string               | Tipo: economico, materiales, etc   |
+| `descripcion`| string               | Descripción del pedido             |
+| `estado`     | string               | Estado: PENDIENTE, COMPROMETIDO... |
+| `monto`      | float (nullable)     | Monto presupuestado                |
+| `moneda`     | string (nullable)    | Código de moneda (ARS, USD, etc)   |
+| `cantidad`   | int (nullable)       | Cantidad requerida                 |
+| `unidad`     | string (nullable)    | Unidad de medida                   |
+| `etapa`      | EtapaBasicInfo       | **Información anidada de la etapa**|
+
+**EtapaBasicInfo:**
+
+| Campo   | Tipo   | Descripción                          |
+| ------- | ------ | ------------------------------------ |
+| `id`    | UUID   | ID de la etapa                       |
+| `nombre`| string | Nombre/título de la etapa            |
+| `estado`| string | Estado: pendiente, financiada, etc   |
+
+#### Errores Posibles
+
+| Código | Descripción               | Ejemplo de Error                                                                                                                 | Solución                                                                  |
+| ------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`                                                                                         | Proporciona un access_token válido                                        |
+| `422`  | Filtro de estado inválido | `{"detail": [{"loc": ["query", "estado_oferta"], "msg": "value is not a valid enumeration member", "type": "type_error.enum"}]}` | El parámetro estado_oferta debe ser un valor válido (pendiente, aceptada, rechazada) |
+
+#### Instrucciones para Probar
+
+**Opción 1: Swagger UI (Recomendado)**
+
+1. Abre: `https://project-planning-cloud-api.onrender.com/docs`
+2. Busca "GET /api/v1/ofertas/mis-ofertas"
+3. Click "Try it out"
+4. (Opcional) Usa el parámetro `estado_oferta` para filtrar
+5. Click "Execute"
+
+**Opción 2: cURL**
+
+```bash
+TOKEN="tu_access_token_aqui"
+
+# Todas mis ofertas
+curl -X GET https://project-planning-cloud-api.onrender.com/api/v1/ofertas/mis-ofertas \
+  -H "Authorization: Bearer $TOKEN"
+
+# Solo pendientes
+curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/ofertas/mis-ofertas?estado_oferta=pendiente" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Solo aceptadas
+curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/ofertas/mis-ofertas?estado_oferta=aceptada" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Diferencia entre Endpoints de Ofertas
+
+| Endpoint | Descripción | Filtro de Estado | Usa Para |
+| -------- | ----------- | --------------- | -------- |
+| `GET /api/v1/ofertas/mis-compromisos` | **Solo ofertas aceptadas** (tus compromisos actuales) | Por estado del pedido (COMPROMETIDO, COMPLETADO) | Ver qué compromisos tienes activos |
+| `GET /api/v1/ofertas/mis-ofertas` | **Todas tus ofertas** (pendientes, aceptadas, rechazadas) | Por estado de la oferta (pendiente, aceptada, rechazada) | Ver el histórico completo de tus ofertas |
+
+---
+
 ## Endpoints de Observaciones
 
 El módulo de **observaciones** permite al consejo directivo realizar seguimiento y control de proyectos en ejecución. Los miembros del consejo pueden crear observaciones que deben ser resueltas por los ejecutores de proyecto dentro de 5 días, con marcado automático como vencidas si no se resuelven a tiempo.
@@ -2356,6 +2525,321 @@ Este es el flujo típico de trabajo con observaciones:
 - La verificación ocurre **al momento de listar o consultar** la observación
 - Si una observación tiene más de 5 días sin resolver, se marca como `vencida` en ese momento
 - Esto optimiza el rendimiento evitando procesos en background
+
+---
+
+## Endpoints de Usuarios
+
+### 1️⃣ Obtener Perfil del Usuario Autenticado
+
+Obtiene los datos del usuario autenticado actualmente.
+
+**Método:** `GET`
+**Ruta:** `/api/v1/users/me`
+**Autenticación:** Requerida (Bearer Token)
+**Código de Respuesta:** `200 OK`
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "550e8400-e29b-41d4-a716-446655440001",
+	"email": "juan.perez@empresa.com",
+	"nombre": "Juan",
+	"apellido": "Pérez",
+	"ong": "Fundación ABC",
+	"role": "MEMBER",
+	"created_at": "2024-10-01T10:00:00+00:00",
+	"updated_at": "2024-10-22T15:30:00+00:00"
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción               | Ejemplo de Error                     | Solución                               |
+| ------ | ------------------------- | ------------------------------------ | -------------------------------------- |
+| `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}` | Proporciona un access_token válido     |
+
+---
+
+## Endpoints de Pedidos - Nuevas Operaciones
+
+### 1️⃣ Obtener Pedido Específico
+
+Obtiene los detalles de un pedido específico.
+
+**Método:** `GET`
+**Ruta:** `/api/v1/pedidos/{pedido_id}`
+**Autenticación:** Requerida (Bearer Token)
+**Código de Respuesta:** `200 OK`
+
+#### Path Parameters
+
+| Parámetro   | Tipo | Descripción     |
+| ----------- | ---- | --------------- |
+| `pedido_id` | UUID | ID del pedido   |
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "423e4567-e89b-12d3-a456-426614174333",
+	"etapa_id": "223e4567-e89b-12d3-a456-426614174111",
+	"tipo": "economico",
+	"descripcion": "Presupuesto para pintura de las paredes interiores",
+	"estado": "PENDIENTE",
+	"monto": 15000.0,
+	"moneda": "ARS",
+	"cantidad": null,
+	"unidad": null
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción               | Ejemplo de Error                                           | Solución                             |
+| ------ | ------------------------- | ---------------------------------------------------------- | ------------------------------------ |
+| `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`                   | Proporciona un access_token válido   |
+| `404`  | Pedido no encontrado      | `{"detail": "Pedido with id ... not found"}`               | Verifica que el pedido_id sea correcto |
+
+---
+
+### 2️⃣ Actualizar Pedido
+
+Actualiza un pedido. Solo el dueño del proyecto puede actualizar. Los pedidos solo pueden actualizarse si están en estado PENDIENTE.
+
+**Método:** `PATCH`
+**Ruta:** `/api/v1/pedidos/{pedido_id}`
+**Autenticación:** Requerida (Bearer Token)
+**Código de Respuesta:** `200 OK`
+**Restricción:** Solo dueño del proyecto; pedido en estado PENDIENTE
+
+#### Path Parameters
+
+| Parámetro   | Tipo | Descripción     |
+| ----------- | ---- | --------------- |
+| `pedido_id` | UUID | ID del pedido   |
+
+#### Parámetros
+
+Todos los campos son opcionales:
+
+| Campo         | Tipo   | Requerido | Descripción                                    |
+| ------------- | ------ | --------- | ---------------------------------------------- |
+| `tipo`        | enum   | No        | Tipo: economico, materiales, mano_obra, etc   |
+| `descripcion` | string | No        | Descripción del pedido (mín. 5 caracteres)     |
+| `monto`       | float  | No        | Monto presupuestado (> 0)                      |
+| `moneda`      | string | No        | Código de moneda (ej: ARS, USD)                |
+| `cantidad`    | int    | No        | Cantidad requerida (> 0)                       |
+| `unidad`      | string | No        | Unidad de medida                               |
+
+#### Body de Prueba
+
+```json
+{
+	"descripcion": "Presupuesto actualizado para pintura con materiales premium",
+	"monto": 18000.0
+}
+```
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "423e4567-e89b-12d3-a456-426614174333",
+	"etapa_id": "223e4567-e89b-12d3-a456-426614174111",
+	"tipo": "economico",
+	"descripcion": "Presupuesto actualizado para pintura con materiales premium",
+	"estado": "PENDIENTE",
+	"monto": 18000.0,
+	"moneda": "ARS",
+	"cantidad": null,
+	"unidad": null
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción                         | Ejemplo de Error                                                       | Solución                                                            |
+| ------ | ----------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `401`  | Token inválido o faltante           | `{"detail": "Invalid or expired token"}`                               | Proporciona un access_token válido                                  |
+| `403`  | No eres el propietario del proyecto | `{"detail": "Only the project owner can update pedidos"}`              | Solo el dueño puede actualizar                                      |
+| `404`  | Pedido no encontrado                | `{"detail": "Pedido with id ... not found"}`                           | Verifica que el pedido_id sea correcto                              |
+| `400`  | Pedido no está en PENDIENTE         | `{"detail": "Cannot update pedido in state COMPROMETIDO. ..."}` | Solo se pueden actualizar pedidos en estado PENDIENTE               |
+
+---
+
+## Endpoints de Ofertas - Nuevas Operaciones
+
+### 1️⃣ Obtener Oferta Específica
+
+Obtiene los detalles de una oferta específica.
+
+**Método:** `GET`
+**Ruta:** `/api/v1/ofertas/{oferta_id}`
+**Autenticación:** Requerida (Bearer Token)
+**Código de Respuesta:** `200 OK`
+
+#### Path Parameters
+
+| Parámetro   | Tipo | Descripción     |
+| ----------- | ---- | --------------- |
+| `oferta_id` | UUID | ID de la oferta |
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "523e4567-e89b-12d3-a456-426614174444",
+	"pedido_id": "423e4567-e89b-12d3-a456-426614174333",
+	"user_id": "550e8400-e29b-41d4-a716-446655440001",
+	"descripcion": "Tengo disponibilidad inmediata para realizar trabajos de pintura...",
+	"monto_ofrecido": 14500.0,
+	"estado": "pendiente",
+	"created_at": "2024-10-22T15:00:00+00:00",
+	"updated_at": "2024-10-22T15:00:00+00:00"
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción               | Ejemplo de Error                                           | Solución                             |
+| ------ | ------------------------- | ---------------------------------------------------------- | ------------------------------------ |
+| `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`                   | Proporciona un access_token válido   |
+| `404`  | Oferta no encontrada      | `{"detail": "Oferta with id ... not found"}`               | Verifica que el oferta_id sea correcto |
+
+---
+
+### 2️⃣ Actualizar Oferta
+
+Actualiza una oferta. Solo el creador de la oferta puede actualizarla. Las ofertas solo pueden actualizarse si están en estado PENDIENTE.
+
+**Método:** `PATCH`
+**Ruta:** `/api/v1/ofertas/{oferta_id}`
+**Autenticación:** Requerida (Bearer Token)
+**Código de Respuesta:** `200 OK`
+**Restricción:** Solo creador; oferta en estado PENDIENTE
+
+#### Path Parameters
+
+| Parámetro   | Tipo | Descripción     |
+| ----------- | ---- | --------------- |
+| `oferta_id` | UUID | ID de la oferta |
+
+#### Parámetros
+
+Todos los campos son opcionales:
+
+| Campo            | Tipo   | Requerido | Descripción                                           |
+| ---------------- | ------ | --------- | ----------------------------------------------------- |
+| `descripcion`    | string | No        | Descripción actualizada de la oferta (mín. 10 car)    |
+| `monto_ofrecido` | float  | No        | Monto actualizado ofrecido (> 0)                      |
+
+#### Body de Prueba
+
+```json
+{
+	"descripcion": "Tengo disponibilidad inmediata con materiales de primera calidad. Entrega dentro de 5 días.",
+	"monto_ofrecido": 13500.0
+}
+```
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "523e4567-e89b-12d3-a456-426614174444",
+	"pedido_id": "423e4567-e89b-12d3-a456-426614174333",
+	"user_id": "550e8400-e29b-41d4-a716-446655440001",
+	"descripcion": "Tengo disponibilidad inmediata con materiales de primera calidad. Entrega dentro de 5 días.",
+	"monto_ofrecido": 13500.0,
+	"estado": "pendiente",
+	"created_at": "2024-10-22T15:00:00+00:00",
+	"updated_at": "2024-10-22T15:45:00+00:00"
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción                    | Ejemplo de Error                                                      | Solución                                           |
+| ------ | ------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------- |
+| `401`  | Token inválido o faltante      | `{"detail": "Invalid or expired token"}`                              | Proporciona un access_token válido                 |
+| `403`  | No eres el creador de la oferta | `{"detail": "Only the user who created the oferta can update it"}`    | Solo quien creó la oferta puede actualizarla       |
+| `404`  | Oferta no encontrada           | `{"detail": "Oferta with id ... not found"}`                          | Verifica que el oferta_id sea correcto             |
+| `400`  | Oferta no está en PENDIENTE    | `{"detail": "Cannot update oferta in state aceptada. ..."}` | Solo se pueden actualizar ofertas en estado PENDIENTE |
+
+---
+
+### 3️⃣ Eliminar Oferta
+
+Elimina una oferta. Solo el creador puede eliminarla. Las ofertas solo pueden eliminarse si están en estado PENDIENTE.
+
+**Método:** `DELETE`
+**Ruta:** `/api/v1/ofertas/{oferta_id}`
+**Autenticación:** Requerida (Bearer Token)
+**Código de Respuesta:** `204 No Content`
+**Restricción:** Solo creador; oferta en estado PENDIENTE
+
+#### Path Parameters
+
+| Parámetro   | Tipo | Descripción     |
+| ----------- | ---- | --------------- |
+| `oferta_id` | UUID | ID de la oferta |
+
+#### Response Exitoso (204)
+
+Sin contenido (No Content)
+
+#### Errores Posibles
+
+| Código | Descripción                    | Ejemplo de Error                                                      | Solución                                       |
+| ------ | ------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------- |
+| `401`  | Token inválido o faltante      | `{"detail": "Invalid or expired token"}`                              | Proporciona un access_token válido             |
+| `403`  | No eres el creador de la oferta | `{"detail": "Only the user who created the oferta can delete it"}`    | Solo quien creó la oferta puede eliminarla      |
+| `404`  | Oferta no encontrada           | `{"detail": "Oferta with id ... not found"}`                          | Verifica que el oferta_id sea correcto          |
+| `400`  | Oferta no está en PENDIENTE    | `{"detail": "Cannot delete oferta in state aceptada. ..."}` | Solo se pueden eliminar ofertas en estado PENDIENTE |
+
+---
+
+## Endpoints de Etapas - Nuevas Operaciones
+
+### 1️⃣ Obtener Etapa Específica
+
+Obtiene los detalles de una etapa específica.
+
+**Método:** `GET`
+**Ruta:** `/api/v1/etapas/{etapa_id}`
+**Autenticación:** Requerida (Bearer Token)
+**Código de Respuesta:** `200 OK`
+
+#### Path Parameters
+
+| Parámetro  | Tipo | Descripción    |
+| ---------- | ---- | -------------- |
+| `etapa_id` | UUID | ID de la etapa |
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "223e4567-e89b-12d3-a456-426614174111",
+	"proyecto_id": "123e4567-e89b-12d3-a456-426614174000",
+	"nombre": "Fase 1: Planificación",
+	"descripcion": "Diseño arquitectónico y planificación inicial del proyecto",
+	"fecha_inicio": "2024-11-01",
+	"fecha_fin": "2024-12-31",
+	"estado": "pendiente",
+	"pendientes_count": 3,
+	"total_pedidos": 5
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción               | Ejemplo de Error                                           | Solución                             |
+| ------ | ------------------------- | ---------------------------------------------------------- | ------------------------------------ |
+| `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`                   | Proporciona un access_token válido   |
+| `404`  | Etapa no encontrada       | `{"detail": "Etapa with id ... not found"}`                | Verifica que el etapa_id sea correcto |
 
 ---
 

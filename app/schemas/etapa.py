@@ -81,3 +81,19 @@ class EtapasListResponse(BaseModel):
 
     etapas: List[EtapaListItem]
     total: int
+
+
+class EtapaDetailResponse(BaseModel):
+    """Single etapa details with pedido counters."""
+
+    model_config = {"from_attributes": True}
+
+    id: UUID
+    proyecto_id: UUID
+    nombre: str
+    descripcion: str
+    fecha_inicio: date
+    fecha_fin: date
+    estado: str
+    pendientes_count: int
+    total_pedidos: int

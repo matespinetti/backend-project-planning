@@ -369,7 +369,30 @@ Request Flow:
 
 Always log errors with full context for debugging and operations.
 
-### 6. Configuration (Environment Variables)
+### 6. Additional Proxy Endpoints
+
+Besides the original project orchestration endpoints, the proxy now exposes more Cloud API capabilities. Each route continues to be stateless: validate input with Pydantic, enforce authorization (ownership/creator checks) and forward to the Cloud Persistence API using the same JWT.
+
+#### Usuarios
+- **GET /api/v1/users/me** → Returns the authenticated profile (`id`, `email`, `nombre`, `apellido`, `ong`, `role`, timestamps). Simply forwards the call and returns whatever the Cloud API responds.
+
+#### Pedidos
+- **GET /api/v1/pedidos/{pedido_id}** → Fetches a single pedido with tipo/descripcion/estado/montos.
+- **PATCH /api/v1/pedidos/{pedido_id}** → Updates optional fields (tipo, descripcion, monto, moneda, cantidad, unidad). Guardrails: only the project owner can edit and only when the pedido is `PENDIENTE`.
+
+#### Ofertas
+- **GET /api/v1/ofertas/{oferta_id}** → Retrieves full oferta detail from the Cloud API.
+- **PATCH /api/v1/ofertas/{oferta_id}** → Allows the creator to change `descripcion` and `monto_ofrecido` while the oferta is `pendiente`.
+- **DELETE /api/v1/ofertas/{oferta_id}** → Removes a pending oferta created by the authenticated user. Returns `204` on success.
+- **GET /api/v1/ofertas/mis-ofertas** → Returns the enriched `OfertaDetailedResponse`, which embeds pedido + etapa info exactly as provided by the Cloud API. Ready to accept `page/page_size` whenever the upstream API supports it.
+- **GET /api/v1/ofertas/mis-compromisos** → Still returns the current list schema. Pagination parameters will be proxied transparently once available upstream.
+
+#### Etapas
+- **GET /api/v1/etapas/{etapa_id}** → Fetches etapa metadata plus `pendientes_count`/`total_pedidos` counters so dashboards can show progress per etapa.
+
+All these endpoints live in their respective routers (`app/api/v1/endpoints/...`) and extra orchestration/ownership checks are encapsulated in `app/services/pedido_service.py` and `app/services/oferta_service.py` to keep routers thin.
+
+### 7. Configuration (Environment Variables)
 
 Required in `.env`:
 
@@ -398,7 +421,7 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
 - Validate required variables on startup
 - Use `@lru_cache` to create singleton settings instance
 
-### 7. Development Setup
+### 8. Development Setup
 
 **Dependencies in `pyproject.toml`:**
 ```toml
@@ -424,7 +447,7 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 http://localhost:8000/docs
 ```
 
-### 8. Docker Deployment
+### 9. Docker Deployment
 
 **docker-compose.yml** includes:
 - FastAPI proxy service only (no PostgreSQL)

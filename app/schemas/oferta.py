@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 from uuid import UUID
 
@@ -14,6 +15,21 @@ class OfertaCreate(BaseModel):
 
     descripcion: str = Field(..., min_length=10)
     monto_ofrecido: Optional[float] = Field(None, gt=0)
+
+
+class OfertaUpdate(BaseModel):
+    """Payload for updating an oferta."""
+
+    descripcion: Optional[str] = Field(None, min_length=10)
+    monto_ofrecido: Optional[float] = Field(None, gt=0)
+
+
+class OfertaEstadoFilter(str, Enum):
+    """Allowed states for filtering personal ofertas."""
+
+    pendiente = "pendiente"
+    aceptada = "aceptada"
+    rechazada = "rechazada"
 
 
 class OfertaUserSummary(BaseModel):
@@ -59,3 +75,43 @@ class OfertaCompromisoResponse(OfertaResponse):
     """Oferta that includes nested pedido information."""
 
     pedido: PedidoResponse
+
+
+class EtapaBasicInfo(BaseModel):
+    """Minimal etapa information for nested pedido data."""
+
+    model_config = {"from_attributes": True, "extra": "ignore"}
+
+    id: Optional[UUID] = None
+    nombre: Optional[str] = None
+    estado: Optional[str] = None
+
+
+class ProyectoBasicInfo(BaseModel):
+    """Minimal project information to support future nested responses."""
+
+    id: UUID
+    titulo: str
+
+
+class PedidoDetailedInfo(BaseModel):
+    """Pedido with nested etapa info for richer oferta responses."""
+
+    model_config = {"from_attributes": True, "extra": "ignore"}
+
+    id: Optional[UUID] = None
+    tipo: Optional[str] = None
+    descripcion: Optional[str] = None
+    estado: Optional[str] = None
+    monto: Optional[float] = None
+    moneda: Optional[str] = None
+    cantidad: Optional[int] = None
+    unidad: Optional[str] = None
+    etapa: Optional[EtapaBasicInfo] = None
+    proyecto: Optional[ProyectoBasicInfo] = None
+
+
+class OfertaDetailedResponse(OfertaResponse):
+    """Oferta enriched with nested pedido (and etapa) details."""
+
+    pedido: Optional[PedidoDetailedInfo] = None

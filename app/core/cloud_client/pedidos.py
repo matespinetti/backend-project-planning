@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import httpx
 
 from app.core.cloud_client.base import CloudAPIBaseClient
-from app.schemas.oferta import OfertaCreate
-from app.schemas.pedido import PedidoCreate
+from app.schemas.oferta import OfertaCreate, OfertaUpdate
+from app.schemas.pedido import PedidoCreate, PedidoUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,45 @@ class CloudPedidoClientMixin(CloudAPIBaseClient):
             logger.exception("Unexpected error deleting pedido: %s", e)
             return {"detail": "Unexpected error deleting pedido"}, 500
 
+    async def get_pedido(
+        self, pedido_id: str, access_token: str
+    ) -> Tuple[Optional[Any], int]:
+        url = f"{self.base_url}/api/v1/pedidos/{pedido_id}"
+        try:
+            resp = await self.client.get(url, headers=self._headers(access_token))
+            return self._parse_json_response(resp)
+        except httpx.TimeoutException as e:
+            logger.error("Timeout fetching pedido after %ss: %s", self.timeout, e)
+            return {"detail": "Timeout contacting Cloud API"}, 504
+        except httpx.RequestError as e:
+            logger.error("Network error fetching pedido: %s", e)
+            return {"detail": "Failed to reach Cloud API"}, 502
+        except Exception as e:
+            logger.exception("Unexpected error fetching pedido: %s", e)
+            return {"detail": "Unexpected error fetching pedido"}, 500
+
+    async def update_pedido(
+        self, pedido_id: str, pedido_data: PedidoUpdate, access_token: str
+    ) -> Tuple[Optional[Any], int]:
+        url = f"{self.base_url}/api/v1/pedidos/{pedido_id}"
+        payload = pedido_data.model_dump(exclude_unset=True, exclude_none=True)
+        try:
+            resp = await self.client.patch(
+                url,
+                json=payload,
+                headers=self._headers(access_token),
+            )
+            return self._parse_json_response(resp)
+        except httpx.TimeoutException as e:
+            logger.error("Timeout updating pedido after %ss: %s", self.timeout, e)
+            return {"detail": "Timeout contacting Cloud API"}, 504
+        except httpx.RequestError as e:
+            logger.error("Network error updating pedido: %s", e)
+            return {"detail": "Failed to reach Cloud API"}, 502
+        except Exception as e:
+            logger.exception("Unexpected error updating pedido: %s", e)
+            return {"detail": "Unexpected error updating pedido"}, 500
+
     async def create_oferta(
         self,
         pedido_id: str,
@@ -121,6 +160,62 @@ class CloudPedidoClientMixin(CloudAPIBaseClient):
             logger.exception("Unexpected error listing ofertas: %s", e)
             return {"detail": "Unexpected error listing ofertas"}, 500
 
+    async def get_oferta(
+        self, oferta_id: str, access_token: str
+    ) -> Tuple[Optional[Any], int]:
+        url = f"{self.base_url}/api/v1/ofertas/{oferta_id}"
+        try:
+            resp = await self.client.get(url, headers=self._headers(access_token))
+            return self._parse_json_response(resp)
+        except httpx.TimeoutException as e:
+            logger.error("Timeout fetching oferta after %ss: %s", self.timeout, e)
+            return {"detail": "Timeout contacting Cloud API"}, 504
+        except httpx.RequestError as e:
+            logger.error("Network error fetching oferta: %s", e)
+            return {"detail": "Failed to reach Cloud API"}, 502
+        except Exception as e:
+            logger.exception("Unexpected error fetching oferta: %s", e)
+            return {"detail": "Unexpected error fetching oferta"}, 500
+
+    async def update_oferta(
+        self, oferta_id: str, oferta_data: OfertaUpdate, access_token: str
+    ) -> Tuple[Optional[Any], int]:
+        url = f"{self.base_url}/api/v1/ofertas/{oferta_id}"
+        payload = oferta_data.model_dump(exclude_unset=True, exclude_none=True)
+        try:
+            resp = await self.client.patch(
+                url,
+                json=payload,
+                headers=self._headers(access_token),
+            )
+            return self._parse_json_response(resp)
+        except httpx.TimeoutException as e:
+            logger.error("Timeout updating oferta after %ss: %s", self.timeout, e)
+            return {"detail": "Timeout contacting Cloud API"}, 504
+        except httpx.RequestError as e:
+            logger.error("Network error updating oferta: %s", e)
+            return {"detail": "Failed to reach Cloud API"}, 502
+        except Exception as e:
+            logger.exception("Unexpected error updating oferta: %s", e)
+            return {"detail": "Unexpected error updating oferta"}, 500
+
+    async def delete_oferta(
+        self, oferta_id: str, access_token: str
+    ) -> Tuple[Optional[Any], int]:
+        url = f"{self.base_url}/api/v1/ofertas/{oferta_id}"
+        try:
+            resp = await self.client.delete(url, headers=self._headers(access_token))
+            return self._parse_json_response(resp)
+        except httpx.TimeoutException as e:
+            logger.error("Timeout deleting oferta after %ss: %s", self.timeout, e)
+            return {"detail": "Timeout contacting Cloud API"}, 504
+        except httpx.RequestError as e:
+            logger.error("Network error deleting oferta: %s", e)
+            return {"detail": "Failed to reach Cloud API"}, 502
+        except Exception as e:
+            logger.exception("Unexpected error deleting oferta: %s", e)
+            return {"detail": "Unexpected error deleting oferta"}, 500
+
     async def accept_oferta(
         self, oferta_id: str, access_token: str
     ) -> Tuple[Optional[Any], int]:
@@ -160,6 +255,28 @@ class CloudPedidoClientMixin(CloudAPIBaseClient):
         except Exception as e:
             logger.exception("Unexpected error listing compromisos: %s", e)
             return {"detail": "Unexpected error listing compromisos"}, 500
+
+    async def list_mis_ofertas(
+        self,
+        access_token: str,
+        estado_oferta: Optional[str] = None,
+    ) -> Tuple[Optional[Any], int]:
+        url = f"{self.base_url}/api/v1/ofertas/mis-ofertas"
+        try:
+            params = {"estado_oferta": estado_oferta} if estado_oferta else None
+            resp = await self.client.get(
+                url, params=params, headers=self._headers(access_token)
+            )
+            return self._parse_json_response(resp)
+        except httpx.TimeoutException as e:
+            logger.error("Timeout listing mis ofertas after %ss: %s", self.timeout, e)
+            return {"detail": "Timeout contacting Cloud API"}, 504
+        except httpx.RequestError as e:
+            logger.error("Network error listing mis ofertas: %s", e)
+            return {"detail": "Failed to reach Cloud API"}, 502
+        except Exception as e:
+            logger.exception("Unexpected error listing mis ofertas: %s", e)
+            return {"detail": "Unexpected error listing mis ofertas"}, 500
 
     async def _simple_post(
         self, url: str, access_token: str
