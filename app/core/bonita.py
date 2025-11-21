@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import httpx
 
@@ -29,6 +29,7 @@ class BonitaClient:
         # Persist connection + cookies across requests
         self.client = httpx.AsyncClient(timeout=timeout, follow_redirects=True)
         self._api_token: Optional[str] = None
+        self._user_id: Optional[str] = None
 
     # ---------- Internal utils ----------
 
@@ -38,6 +39,11 @@ class BonitaClient:
         if self._api_token:
             headers["X-Bonita-API-Token"] = self._api_token
         return headers
+
+    @property
+    def user_id(self) -> Optional[str]:
+        """Return the Bonita user ID for the authenticated session."""
+        return self._user_id
 
     def _extract_api_token_from_cookies(self) -> Optional[str]:
         """
@@ -93,12 +99,11 @@ class BonitaClient:
 
             token = self._extract_api_token_from_cookies()
             if not token:
-                # Some setups require fetching the session endpoint to populate cookies
-                sess = await self.client.get(f"{self.base_url}/API/system/session")
                 token = self._extract_api_token_from_cookies()
 
             if token:
                 self._api_token = token
+                await self._ensure_user_context()
                 logger.info("Authenticated with Bonita; API token acquired.")
                 return True
             else:
@@ -254,6 +259,145 @@ class BonitaClient:
             logger.exception(f"Error setting case variable: {e}")
             return False
 
+    async def get_pending_tasks(
+        self,
+        case_id: Optional[str] = None,
+        process_instance_id: Optional[str] = None,
+        task_name: Optional[str] = None,
+        task_name_field: Literal["displayName", "name"] = "displayName",
+        is_subprocess: bool = False,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        Get pending human tasks for a specific case or process instance.
+
+        Args:
+            case_id: Bonita case ID (optional)
+            process_instance_id: Bonita process instance ID (optional, used if case_id is not provided)
+            task_name: Optional filter by task display name (e.g., "Evaluate Offer")
+            task_name_field: Field to match task name against ("name" or "displayName")
+            is_subprocess: If True, filter by parentCaseId instead of caseId (for subprocess tasks)
+
+        Returns:
+            List of task objects with id, displayName, caseId, etc., or None on error
+        """
+        try:
+            await self._ensure_session()
+
+            url = f"{self.base_url}/API/bpm/humanTask"
+
+            # Build query filters
+            # Bonita expects multiple 'f' parameters for filtering
+            query_params: List[tuple] = [
+                ("p", 0),  # page
+                ("c", 10),  # count
+                ("f", "state=ready"),  # Only tasks ready for execution
+            ]
+
+            # Filter by case_id or process_instance_id (case_id takes precedence)
+            if case_id:
+                # For subprocesses, filter by parentCaseId instead of caseId
+                if is_subprocess:
+                    query_params.append(("f", f"parentCaseId={case_id}"))
+                else:
+                    query_params.append(("f", f"caseId={case_id}"))
+            elif process_instance_id:
+                query_params.append(("f", f"processInstanceId={process_instance_id}"))
+            else:
+                raise ValueError("Either case_id or process_instance_id must be provided")
+
+            if task_name:
+                field = "displayName" if task_name_field == "displayName" else "name"
+                query_params.append(("f", f"{field}={task_name}"))
+
+            async def _call():
+                return await self.client.get(
+                    url, params=query_params, headers=self._headers()
+                )
+
+            resp = await self._retry_on_401(_call)
+
+            if resp.status_code == 200:
+                tasks = resp.json()
+                logger.info(
+                    f"Found {len(tasks)} pending task(s) for case {case_id}"
+                    + (f" with name '{task_name}'" if task_name else "")
+                )
+                return tasks
+
+            logger.error(
+                f"Failed to get pending tasks: {resp.status_code} - {resp.text}"
+            )
+            return None
+
+        except Exception as e:
+            logger.exception(f"Error getting pending tasks: {e}")
+            return None
+
+    async def execute_user_task(
+        self, task_id: str, contract_inputs: Dict[str, Any]
+    ) -> bool:
+        """
+        Execute a user task with contract inputs.
+
+        Args:
+            task_id: Bonita task ID
+            contract_inputs: Contract data (e.g., {"decision": "accept", "oferta_id": "uuid"})
+
+        Returns:
+            True if task executed successfully, False otherwise
+        """
+        try:
+            await self._ensure_session()
+
+            url = f"{self.base_url}/API/bpm/userTask/{task_id}/execution"
+
+            async def _call():
+                return await self.client.post(
+                    url, json=contract_inputs, headers=self._headers()
+                )
+
+            resp = await self._retry_on_401(_call)
+
+            if resp.status_code == 204:  # Bonita returns 204 No Content on success
+                logger.info(
+                    f"Task {task_id} executed successfully with inputs: {contract_inputs}"
+                )
+                return True
+
+            logger.error(
+                f"Failed to execute task {task_id}: {resp.status_code} - {resp.text}"
+            )
+            return False
+
+        except Exception as e:
+            logger.exception(f"Error executing task {task_id}: {e}")
+            return False
+
+    async def assign_user_task(self, task_id: str, user_id: str) -> bool:
+        """Assign a user task to the specified user."""
+        try:
+            await self._ensure_session()
+
+            url = f"{self.base_url}/API/bpm/humanTask/{task_id}"
+            payload = {"assigned_id": user_id}
+
+            async def _call():
+                return await self.client.put(url, json=payload, headers=self._headers())
+
+            resp = await self._retry_on_401(_call)
+
+            if resp.status_code == 200:
+                logger.info(f"Task {task_id} assigned to user {user_id}")
+                return True
+
+            logger.error(
+                f"Failed to assign task {task_id} to user {user_id}: {resp.status_code} - {resp.text}"
+            )
+            return False
+        except Exception as e:
+            logger.exception(f"Error assigning task {task_id} to user {user_id}: {e}")
+            return False
+
     async def aclose(self):
         """Close the async client."""
         await self.client.aclose()
@@ -265,3 +409,79 @@ class BonitaClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.aclose()
+
+    async def ensure_user_context(self) -> Optional[str]:
+        """Public helper to guarantee user_id is populated."""
+        await self._ensure_user_context()
+        return self._user_id
+    async def _fetch_user_id_from_session(self) -> Optional[str]:
+        """Attempt to read the logged-in user ID from the system session endpoint."""
+        try:
+            resp = await self.client.get(
+                f"{self.base_url}/API/system/session", headers=self._headers()
+            )
+            if resp.status_code == 200:
+                session_json = resp.json()
+                value = session_json.get("user_id")
+                if value is not None:
+                    return str(value)
+                logger.warning("Bonita session response did not include user_id")
+            else:
+                logger.warning(
+                    "Failed to fetch Bonita session info: %s - %s",
+                    resp.status_code,
+                    resp.text[:300],
+                )
+        except Exception as exc:
+            logger.exception("Error fetching Bonita session info: %s", exc)
+        return None
+
+    async def _fetch_user_id_by_username(self) -> Optional[str]:
+        """Fallback: query identity API to resolve the configured username."""
+        try:
+            params = [("f", f"userName={self.username}"), ("p", 0), ("c", 1)]
+
+            async def _call():
+                return await self.client.get(
+                    f"{self.base_url}/API/identity/user",
+                    params=params,
+                    headers=self._headers(),
+                )
+
+            resp = await self._retry_on_401(_call)
+            if resp.status_code == 200:
+                users = resp.json()
+                if users:
+                    user = users[0]
+                    value = user.get("id")
+                    if value is not None:
+                        return str(value)
+                logger.warning(
+                    "Identity query for username %s returned no users", self.username
+                )
+            else:
+                logger.error(
+                    "Failed identity lookup for username %s: %s - %s",
+                    self.username,
+                    resp.status_code,
+                    resp.text[:300],
+                )
+        except Exception as exc:
+            logger.exception("Error resolving user id via identity API: %s", exc)
+        return None
+
+    async def _ensure_user_context(self) -> None:
+        """Ensure we know the Bonita user id for the current session."""
+        if self._user_id:
+            return
+
+        user_id = await self._fetch_user_id_from_session()
+        if user_id:
+            self._user_id = user_id
+            return
+
+        user_id = await self._fetch_user_id_by_username()
+        if user_id:
+            self._user_id = user_id
+        else:
+            logger.error("Unable to resolve Bonita user id for username %s", self.username)

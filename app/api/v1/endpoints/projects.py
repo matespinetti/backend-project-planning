@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import List, Literal, Optional
 from uuid import UUID
@@ -19,6 +20,15 @@ from app.schemas.proyecto import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 settings = get_settings()
+
+
+def _to_detail(payload: Optional[object], default: str) -> object:
+    """Normalize Cloud API payloads into FastAPI detail objects."""
+    if isinstance(payload, (dict, list)):
+        return payload
+    if isinstance(payload, str):
+        return {"detail": payload}
+    return {"detail": default}
 
 
 @router.get("/projects", response_model=PaginatedProyectoResponse)
@@ -132,6 +142,9 @@ async def get_project(
     Used by Bonita process or frontend to fetch project information.
     Returns proyecto with all nested etapas and pedidos.
     """
+    logger.info(f"[ROUTE DEBUG] GET /projects/{project_id} endpoint called")
+    logger.info(f"[ROUTE DEBUG] Authenticated user: {auth.user_id}")
+
     cloud_client = None
     try:
         logger.info(f"Proxying request to Cloud API for proyecto {project_id}")
@@ -170,7 +183,7 @@ async def list_project_etapas(
     project_id: UUID,
     estado: Optional[str] = Query(
         None,
-        regex="^(pendiente|financiada|en_ejecucion|completada)$",
+        regex="^(pendiente|financiada|esperando_ejecucion|en_ejecucion|completada)$",
         description="Filter etapas by estado",
     ),
     auth: AuthenticatedUser = Depends(get_current_user),
@@ -212,6 +225,407 @@ async def list_project_etapas(
             await cloud_client.aclose()
 
 
+@router.post(
+    "/projects/{project_id}/start",
+    response_model=ProyectoResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def start_project(
+    project_id: UUID,
+    auth: AuthenticatedUser = Depends(get_current_user),
+) -> ProyectoResponse:
+    """
+    Start a project by executing the ConfirmStartProject task in Bonita.
+
+    Flow:
+    1. Get proyecto from Cloud API (extract bonita_case_id)
+    2. Find pending "ConfirmStartProject" task in Bonita for that case
+    3. Execute task (Bonita will call Cloud API to update project status via connectors)
+    4. Return updated proyecto from Cloud API
+
+    Called from frontend with empty body. Transitions project from pendiente to en_ejecucion
+    when all etapas are fully funded (validated by Cloud API via Bonita connectors).
+    """
+    cloud_client = None
+    bonita_client = None
+
+    try:
+        # Step 1: Get proyecto from Cloud API to extract bonita_case_id
+        logger.info(f"Fetching proyecto {project_id} to get Bonita context")
+        cloud_client = CloudAPIClient()
+
+        proyecto_data = await cloud_client.get_project(str(project_id), auth.token)
+
+        if not proyecto_data:
+            logger.warning(f"Proyecto {project_id} not found in Cloud API")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Proyecto with id {project_id} not found",
+            )
+
+        bonita_case_id = proyecto_data.get("bonita_case_id")
+
+        if not bonita_case_id:
+            logger.error(
+                f"Proyecto {project_id} is not associated with a Bonita process. "
+                f"Cannot execute ConfirmStartProject task."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "detail": "Proyecto is not associated with a Bonita process. Cannot start project."
+                },
+            )
+
+        logger.info(f"Found Bonita case {bonita_case_id} for proyecto {project_id}")
+
+        # Step 2: Find pending "ConfirmStartProject" task in Bonita
+        bonita_client = BonitaClient()
+        bonita_task_name = "ConfirmStartProject"
+
+        logger.info(f"Searching for pending task '{bonita_task_name}' in Bonita case {bonita_case_id}")
+        tasks = await bonita_client.get_pending_tasks(
+            case_id=bonita_case_id,
+            task_name=bonita_task_name,
+            task_name_field="name",
+        )
+
+        if not tasks or len(tasks) == 0:
+            # Fallback: fetch tasks without filter and match client-side
+            logger.info(
+                "No tasks found using Bonita name filter. Falling back to unfiltered search."
+            )
+            tasks = await bonita_client.get_pending_tasks(case_id=bonita_case_id)
+
+        matched_task = None
+
+        def _normalize(value: Optional[str]) -> Optional[str]:
+            if isinstance(value, str):
+                return value.strip()
+            return value
+
+        if tasks:
+            for task in tasks:
+                task_name_val = _normalize(task.get("name"))
+                if task_name_val == bonita_task_name:
+                    matched_task = task
+                    break
+
+        if not matched_task:
+            logger.warning(
+                "Pending tasks for case %s did not match expected task name. Raw task data: %s",
+                bonita_case_id,
+                tasks,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "detail": "No pending 'ConfirmStartProject' task found in Bonita for this project"
+                },
+            )
+
+        task_id = matched_task["id"]
+        logger.info(
+            f"Found pending task {task_id} (name={matched_task.get('name')}) for case {bonita_case_id}"
+        )
+
+        # Step 3: Assign task to current user if needed
+        assigned_to = (matched_task.get("assigned_id") or "").strip()
+        bonita_user_id = await bonita_client.ensure_user_context()
+
+        if not bonita_user_id:
+            logger.error("Bonita user_id not available after authentication")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"detail": "Bonita authentication failed to provide user context"},
+            )
+
+        if not assigned_to or assigned_to != bonita_user_id:
+            logger.info(
+                f"Assigning task {task_id} to Bonita user {bonita_user_id} before execution"
+            )
+            assigned = await bonita_client.assign_user_task(
+                task_id=task_id, user_id=bonita_user_id
+            )
+            if not assigned:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail={"detail": "Failed to assign Bonita task before execution"},
+                )
+
+        # Step 4: Execute task with empty contract
+        contract_inputs = {}
+
+        logger.info(f"Executing Bonita task {task_id} (ConfirmStartProject)")
+        success = await bonita_client.execute_user_task(task_id, contract_inputs)
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"detail": "Failed to execute Bonita task"},
+            )
+
+        # Step 5: Wait briefly for Bonita connectors to complete
+        # Bonita will call Cloud API start_project via OUT connectors
+        logger.info("Waiting for Bonita connectors to update Cloud API...")
+        await asyncio.sleep(2)
+
+        # Step 6: Get updated proyecto from Cloud API
+        logger.info(f"Fetching updated proyecto {project_id} from Cloud API")
+        updated_data = await cloud_client.get_project(str(project_id), auth.token)
+
+        if updated_data:
+            logger.info(
+                f"Successfully started proyecto {project_id} via Bonita task execution"
+            )
+            return ProyectoResponse.model_validate(updated_data)
+
+        # Task executed but couldn't fetch updated proyecto
+        logger.warning(
+            f"Bonita task executed but failed to fetch updated proyecto {project_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "detail": "Bonita task executed but failed to fetch updated proyecto. Check Cloud API logs."
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error starting proyecto {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error starting proyecto: {str(e)}",
+        ) from e
+    finally:
+        if bonita_client:
+            await bonita_client.aclose()
+        if cloud_client:
+            await cloud_client.aclose()
+
+
+@router.post(
+    "/projects/{project_id}/complete",
+    response_model=ProyectoResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def complete_project(
+    project_id: UUID,
+    auth: AuthenticatedUser = Depends(get_current_user),
+) -> ProyectoResponse:
+    """
+    Complete a project by executing the FinishProject task in Bonita.
+
+    Flow:
+    1. Get proyecto from Cloud API (extract bonita_case_id)
+    2. Find pending "FinishProject" task in Bonita for that case
+    3. Execute task (Bonita will call Cloud API to update proyecto status via connectors)
+    4. Return updated proyecto from Cloud API
+
+    Called from frontend with empty body. Transitions project from en_ejecucion to finalizado.
+    Cloud API automatically handles state transitions via Bonita connectors.
+    The main ProjectExecution process ends when FinishProject task is executed.
+    """
+    cloud_client = None
+    bonita_client = None
+
+    try:
+        # Step 1: Get proyecto from Cloud API to extract bonita_case_id
+        logger.info(f"Fetching proyecto {project_id} to get Bonita context")
+        cloud_client = CloudAPIClient()
+
+        proyecto_data = await cloud_client.get_project(str(project_id), auth.token)
+
+        if not proyecto_data:
+            logger.warning(f"Proyecto {project_id} not found in Cloud API")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Proyecto with id {project_id} not found",
+            )
+
+        bonita_case_id = proyecto_data.get("bonita_case_id")
+
+        if not bonita_case_id:
+            logger.error(
+                f"Proyecto {project_id} is not associated with a Bonita process. "
+                f"Cannot execute FinishProject task (missing bonita_case_id)."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "detail": "Proyecto is not associated with a Bonita process. Cannot complete project."
+                },
+            )
+
+        logger.info(f"Found Bonita case {bonita_case_id} for proyecto {project_id}")
+
+        # Step 2: Find pending "FinishProject" task in Bonita
+        bonita_client = BonitaClient()
+        bonita_task_name = "FinishProject"
+
+        # First, fetch ALL pending tasks for this case
+        logger.info(f"Fetching ALL pending tasks for case {bonita_case_id}...")
+        all_tasks = await bonita_client.get_pending_tasks(case_id=bonita_case_id)
+
+        if all_tasks:
+            logger.info(f"Found {len(all_tasks)} pending task(s) in case {bonita_case_id}:")
+            for idx, task in enumerate(all_tasks, 1):
+                logger.info(f"Task {idx}: {task}")
+        else:
+            logger.warning(f"No pending tasks found in case {bonita_case_id}. Fetching ALL tasks in Bonita with state=ready...")
+            # If no tasks in this case, fetch ALL pending tasks in Bonita to see what's available
+            try:
+                await bonita_client._ensure_session()
+                url = f"{bonita_client.base_url}/API/bpm/humanTask"
+                query_params = [
+                    ("p", 0),
+                    ("c", 50),
+                    ("f", "state=ready"),
+                ]
+                resp = await bonita_client.client.get(
+                    url, params=query_params, headers=bonita_client._headers()
+                )
+                if resp.status_code == 200:
+                    all_bonita_tasks = resp.json()
+                    logger.info(f"Total pending tasks in entire Bonita system: {len(all_bonita_tasks)}")
+                    for idx, task in enumerate(all_bonita_tasks, 1):
+                        logger.info(f"RAW TASK DATA [{idx}]: {task}")
+            except Exception as e:
+                logger.error(f"Error fetching all Bonita tasks: {e}")
+
+        # Now search specifically for FinishProject task in the case
+        logger.info(
+            f"Searching for pending task '{bonita_task_name}' in Bonita case {bonita_case_id}"
+        )
+        tasks = await bonita_client.get_pending_tasks(
+            case_id=bonita_case_id,
+            task_name=bonita_task_name,
+            task_name_field="name",
+        )
+
+        if not tasks or len(tasks) == 0:
+            # Fallback: use all_tasks already fetched
+            logger.info(
+                "No tasks found with name filter. Using all pending tasks from case (or Bonita-wide if case was empty)."
+            )
+            tasks = all_tasks if all_tasks else []
+
+        matched_task = None
+
+        def _normalize(value: Optional[str]) -> Optional[str]:
+            if isinstance(value, str):
+                return value.strip()
+            return value
+
+        if tasks:
+            logger.info(f"Available tasks: {len(tasks)} total")
+            for idx, task in enumerate(tasks, 1):
+                task_name_val = _normalize(task.get("name"))
+                logger.info(
+                    f"  Task {idx}: id={task.get('id')}, name={task.get('name')}, "
+                    f"displayName={task.get('displayName')}, state={task.get('state')}"
+                )
+                if task_name_val == bonita_task_name:
+                    matched_task = task
+                    logger.info(f"  -> MATCHED!")
+                    break
+
+        if not matched_task:
+            logger.warning(
+                "Pending tasks for case %s did not match expected task name 'FinishProject'. Raw task data: %s",
+                bonita_case_id,
+                tasks,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "detail": "No pending 'FinishProject' task found in Bonita for this project"
+                },
+            )
+
+        task_id = matched_task["id"]
+        logger.info(
+            f"✅ Found pending task {task_id} (name='{matched_task.get('name')}', "
+            f"displayName='{matched_task.get('displayName')}') for case {bonita_case_id}"
+        )
+
+        # Step 3: Assign task to current user if needed
+        assigned_to = (matched_task.get("assigned_id") or "").strip()
+        bonita_user_id = await bonita_client.ensure_user_context()
+
+        if not bonita_user_id:
+            logger.error("Bonita user_id not available after authentication")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"detail": "Bonita authentication failed to provide user context"},
+            )
+
+        if not assigned_to or assigned_to != bonita_user_id:
+            logger.info(
+                f"Assigning task {task_id} to Bonita user {bonita_user_id} before execution"
+            )
+            assigned = await bonita_client.assign_user_task(
+                task_id=task_id, user_id=bonita_user_id
+            )
+            if not assigned:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail={"detail": "Failed to assign Bonita task before execution"},
+                )
+
+        # Step 4: Execute task with empty contract
+        contract_inputs = {}
+
+        logger.info(f"Executing Bonita task {task_id} (FinishProject)")
+        success = await bonita_client.execute_user_task(task_id, contract_inputs)
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"detail": "Failed to execute Bonita task"},
+            )
+
+        # Step 5: Wait briefly for Bonita connectors to complete
+        # Bonita will call Cloud API complete_project via OUT connectors
+        logger.info("Waiting for Bonita connectors to update Cloud API...")
+        await asyncio.sleep(2)
+
+        # Step 6: Get updated proyecto from Cloud API
+        logger.info(f"Fetching updated proyecto {project_id} from Cloud API")
+        updated_data = await cloud_client.get_project(str(project_id), auth.token)
+
+        if updated_data:
+            logger.info(
+                f"Successfully completed proyecto {project_id} via Bonita task execution"
+            )
+            return ProyectoResponse.model_validate(updated_data)
+
+        # Task executed but couldn't fetch updated proyecto
+        logger.warning(
+            f"Bonita task executed but failed to fetch updated proyecto {project_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "detail": "Bonita task executed but failed to fetch updated proyecto. Check Cloud API logs."
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error completing proyecto {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error completing proyecto: {str(e)}",
+        ) from e
+    finally:
+        if bonita_client:
+            await bonita_client.aclose()
+        if cloud_client:
+            await cloud_client.aclose()
 
 
 @router.post(

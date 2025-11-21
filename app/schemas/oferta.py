@@ -24,6 +24,12 @@ class OfertaUpdate(BaseModel):
     monto_ofrecido: Optional[float] = Field(None, gt=0)
 
 
+class OfertaEvaluationRequest(BaseModel):
+    """Payload for evaluating an oferta (accept/reject) via Bonita."""
+
+    decision: str = Field(..., pattern="^(accept|reject)$", description="Decision: accept or reject")
+
+
 class OfertaEstadoFilter(str, Enum):
     """Allowed states for filtering personal ofertas."""
 
@@ -85,13 +91,20 @@ class EtapaBasicInfo(BaseModel):
     id: Optional[UUID] = None
     nombre: Optional[str] = None
     estado: Optional[str] = None
+    proyecto: Optional[ProyectoBasicInfo] = None
 
 
 class ProyectoBasicInfo(BaseModel):
     """Minimal project information to support future nested responses."""
 
+    model_config = {"from_attributes": True, "extra": "ignore"}
+
     id: UUID
     titulo: str
+    tipo: Optional[str] = None
+    ciudad: Optional[str] = None
+    provincia: Optional[str] = None
+    estado: Optional[str] = None
 
 
 class PedidoDetailedInfo(BaseModel):

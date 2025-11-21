@@ -55,6 +55,10 @@ class EtapaResponse(BaseModel):
     fecha_inicio: date
     fecha_fin: date
     proyecto_id: UUID
+    estado: str
+    bonita_case_id: Optional[str] = None
+    bonita_process_instance_id: Optional[int] = None
+    fecha_completitud: Optional[datetime] = None
     pedidos: List[PedidoResponse] = []
 
 
@@ -70,6 +74,8 @@ class EtapaListItem(BaseModel):
     fecha_inicio: date
     fecha_fin: date
     estado: str
+    bonita_case_id: Optional[str] = None
+    bonita_process_instance_id: Optional[int] = None
     fecha_completitud: Optional[datetime] = None
     pedidos: List[PedidoResponse] = []
     pedidos_pendientes_count: int = 0
@@ -95,5 +101,7 @@ class EtapaDetailResponse(BaseModel):
     fecha_inicio: date
     fecha_fin: date
     estado: str
-    pendientes_count: int
-    total_pedidos: int
+    bonita_case_id: Optional[str] = None
+    bonita_process_instance_id: Optional[int] = None
+    pendientes_count: Optional[int] = None
+    total_pedidos: Optional[int] = None

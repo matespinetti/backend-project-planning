@@ -154,6 +154,25 @@ Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
 Content-Type: application/json
 ```
 
+### Integración con Bonita BPM (API Key)
+
+Para permitir que Bonita invoque la API sin JWT, habilitamos una clave dedicada:
+
+- Define `BONITA_API_KEY` y `BONITA_SYSTEM_USER_ID` en tu `.env`.
+- Cada request enviada desde Bonita debe incluir el header `X-API-Key` con el valor configurado.
+- Si la clave es válida, la API resuelve automáticamente al usuario configurado en `BONITA_SYSTEM_USER_ID` y la solicitud continúa como si hubiera presentado un JWT.
+
+Ejemplo de request desde Bonita:
+
+```
+X-API-Key: ${API_KEY_FASTAPI}
+Content-Type: application/json
+```
+
+> ⚠️ Usa HTTPS y rota periódicamente la clave. Si el header está presente pero no coincide, la API responde con `401 Invalid Bonita API key`.
+>
+> ℹ️ El script `seed_data.py` crea automáticamente el usuario `bonita.integration@projectplanning.org` con el UUID `11111111-1111-1111-1111-111111111111`. Puedes reutilizarlo configurando `BONITA_SYSTEM_USER_ID` con ese valor, o crear otro usuario manualmente y apuntar la variable a su `id`.
+
 ### Información de Tokens
 
 | Propiedad                | Valor               |
@@ -520,6 +539,10 @@ Crea un nuevo proyecto con etapas y pedidos anidados en una sola transacción.
 			"descripcion": "Preparación del terreno y construcción de cimientos",
 			"fecha_inicio": "2024-11-01",
 			"fecha_fin": "2024-12-31",
+			"estado": "pendiente",
+			"fecha_completitud": null,
+			"bonita_case_id": null,
+			"bonita_process_instance_id": null,
 			"pedidos": [
 				{
 					"id": "323e4567-e89b-12d3-a456-426614174222",
@@ -552,6 +575,10 @@ Crea un nuevo proyecto con etapas y pedidos anidados en una sola transacción.
 			"descripcion": "Construcción de estructura principal del edificio",
 			"fecha_inicio": "2025-01-01",
 			"fecha_fin": "2025-03-31",
+			"estado": "pendiente",
+			"fecha_completitud": null,
+			"bonita_case_id": null,
+			"bonita_process_instance_id": null,
 			"pedidos": [
 				{
 					"id": "323e4567-e89b-12d3-a456-426614174224",
@@ -778,7 +805,11 @@ GET /api/v1/projects/123e4567-e89b-12d3-a456-426614174000
 
 #### Response Exitoso (200)
 
-Retorna la estructura completa del proyecto igual que en el `POST` (ver ejemplo anterior).
+Retorna la estructura completa del proyecto igual que en el `POST` (ver ejemplo anterior), incluyendo:
+- El campo `estado` de cada etapa (`pendiente`, `financiada`, `esperando_ejecucion`, `en_ejecucion`, `completada`)
+- El timestamp de completitud de cada etapa (`fecha_completitud`)
+- Los IDs de integración con Bonita (`bonita_case_id`, `bonita_process_instance_id`)
+- Todos los pedidos con su estado actual
 
 #### Errores Posibles
 
@@ -951,13 +982,13 @@ curl -X DELETE https://project-planning-cloud-api.onrender.com/api/v1/projects/$
 
 ### 6️⃣ Iniciar Proyecto
 
-Inicia un proyecto cambiando su estado de `pendiente` a `en_ejecucion`.
+Inicia un proyecto cambiando su estado de `pendiente` a `en_ejecucion`. Este endpoint es invocado por Bonita después de que todos los pedidos hayan sido financiados.
 
 **Método:** `POST`
 **Ruta:** `/api/v1/projects/{project_id}/start`
-**Autenticación:** Requerida (Bearer Token)
+**Autenticación:** Requerida (Bearer Token o X-API-Key para Bonita)
 **Código de Respuesta:** `200 OK`
-**Restricción:** Solo el propietario del proyecto puede iniciarlo
+**Restricción:** Solo el propietario del proyecto O Bonita (via API key) puede iniciarlo
 **Validación:** Todas las etapas deben estar financiadas (sin pedidos en `PENDIENTE`)
 
 #### Path Parameters
@@ -972,9 +1003,13 @@ Para iniciar un proyecto, se deben cumplir estas condiciones:
 
 1. **Estado actual:** El proyecto debe estar en estado `pendiente`
 2. **Etapas financiadas:** TODAS las etapas deben tener sus pedidos en estado `COMPROMETIDO` o `COMPLETADO`
-3. **Propiedad:** Solo el dueño del proyecto puede iniciarlo
+3. **Propiedad:** Solo el dueño del proyecto O Bonita (autenticado via X-API-Key) pueden iniciarlo
 
 Si algún pedido sigue en `PENDIENTE`, el endpoint retorna error 400 con la lista detallada de pedidos que necesitan financiamiento.
+
+#### Autorización para Bonita
+
+Bonita puede iniciar proyectos sin ser el propietario utilizando su API key. El sistema verifica automáticamente que el request viene desde Bonita y permite la operación:
 
 #### Response Exitoso (200)
 
@@ -1043,7 +1078,7 @@ Cuando hay pedidos sin completar, el error incluye la lista completa con detalle
 4. Pega el UUID del proyecto en "project_id"
 5. Click "Execute"
 
-**Opción 2: cURL**
+**Opción 2: cURL con JWT Token**
 
 ```bash
 TOKEN="tu_access_token_aqui"
@@ -1051,6 +1086,16 @@ PROJECT_ID="123e4567-e89b-12d3-a456-426614174000"
 
 curl -X POST https://project-planning-cloud-api.onrender.com/api/v1/projects/$PROJECT_ID/start \
   -H "Authorization: Bearer $TOKEN"
+```
+
+**Opción 3: cURL con Bonita API Key**
+
+```bash
+API_KEY="tu_bonita_api_key_aqui"
+PROJECT_ID="123e4567-e89b-12d3-a456-426614174000"
+
+curl -X POST https://project-planning-cloud-api.onrender.com/api/v1/projects/$PROJECT_ID/start \
+  -H "X-API-Key: $API_KEY"
 ```
 
 **Resultado esperado:**
@@ -1130,7 +1175,7 @@ Obtiene todas las etapas de un proyecto con información detallada de pedidos, c
 
 | Parámetro | Tipo  | Descripción                                                                       |
 | --------- | ----- | --------------------------------------------------------------------------------- |
-| `estado`  | enum  | Filtra por estado específico: `pendiente`, `financiada`, `en_ejecucion`, `completada`. |
+| `estado`  | enum  | Filtra por estado específico: `pendiente`, `financiada`, `esperando_ejecucion`, `en_ejecucion`, `completada`. |
 
 #### ¿Qué incluye la respuesta?
 
@@ -1215,13 +1260,13 @@ curl -X GET https://project-planning-cloud-api.onrender.com/api/v1/projects/$PRO
 
 ### 2️⃣ Iniciar Etapa
 
-Cambia una etapa del estado `financiada` (o `pendiente` sin pedidos abiertos) a `en_ejecucion`. Valida automáticamente que el proyecto esté en ejecución y que no existan pedidos pendientes.
+Cambia una etapa desde `financiada`, `pendiente` (sin pedidos abiertos) o `esperando_ejecucion` a `en_ejecucion`. Valida automáticamente que el proyecto esté en ejecución y que no existan pedidos pendientes.
 
 **Método:** `POST`
 **Ruta:** `/api/v1/etapas/{etapa_id}/start`
-**Autenticación:** Requerida (Bearer Token)
+**Autenticación:** Requerida (Bearer Token o X-API-Key para Bonita)
 **Código de Respuesta:** `200 OK`
-**Restricción:** Solo el propietario del proyecto puede iniciar etapas
+**Restricción:** Solo el propietario del proyecto o Bonita (via X-API-Key) pueden iniciar etapas
 
 #### Path Parameters
 
@@ -1260,7 +1305,7 @@ Cambia una etapa del estado `financiada` (o `pendiente` sin pedidos abiertos) a 
 3. Click "Try it out" y pega el `etapa_id`.
 4. Ejecuta y verifica el nuevo estado.
 
-**Opción 2: cURL**
+**Opción 2: cURL (con JWT)**
 
 ```bash
 TOKEN="tu_access_token_del_propietario"
@@ -1268,6 +1313,16 @@ ETAPA_ID="223e4567-e89b-12d3-a456-426614174111"
 
 curl -X POST https://project-planning-cloud-api.onrender.com/api/v1/etapas/$ETAPA_ID/start \
   -H "Authorization: Bearer $TOKEN"
+```
+
+**Opción 3: cURL (Bonita con X-API-Key)**
+
+```bash
+BONITA_API_KEY="tu_bonita_api_key_aqui"
+ETAPA_ID="223e4567-e89b-12d3-a456-426614174111"
+
+curl -X POST https://project-planning-cloud-api.onrender.com/api/v1/etapas/$ETAPA_ID/start \
+  -H "X-API-Key: $BONITA_API_KEY"
 ```
 
 ---
@@ -1340,7 +1395,7 @@ Crea un nuevo pedido dentro de una etapa específica de un proyecto.
 **Ruta:** `/api/v1/projects/{project_id}/etapas/{etapa_id}/pedidos`
 **Autenticación:** Requerida (Bearer Token)
 **Código de Respuesta:** `201 Created`
-**Restricción:** Solo el propietario del proyecto
+**Restricción:** Solo el propietario del proyecto (o llamadas autenticadas con `X-API-Key` desde Bonita)
 
 #### Path Parameters
 
@@ -1743,7 +1798,7 @@ El propietario del proyecto acepta una oferta, compromentiéndose a usar los ser
 **Ruta:** `/api/v1/ofertas/{oferta_id}/accept`
 **Autenticación:** Requerida (Bearer Token)
 **Código de Respuesta:** `200 OK`
-**Restricción:** Solo el propietario del proyecto
+**Restricción:** Solo el propietario del proyecto (o Bonita vía `X-API-Key`)
 **Efecto Cascada:**
 
 -   Oferta estado → `aceptada`
@@ -1780,7 +1835,7 @@ Sin body requerido.
 | Código | Descripción                         | Ejemplo de Error                                          | Solución                                                 |
 | ------ | ----------------------------------- | --------------------------------------------------------- | -------------------------------------------------------- |
 | `401`  | Token inválido o faltante           | `{"detail": "Invalid or expired token"}`                  | Proporciona un access_token válido                       |
-| `403`  | No eres el propietario del proyecto | `{"detail": "You are not the owner of this project"}`     | Solo el dueño del proyecto puede aceptar ofertas         |
+| `403`  | No eres el propietario del proyecto | `{"detail": "You are not the owner of this project"}`     | Solo el dueño del proyecto (o Bonita vía `X-API-Key`) puede aceptar ofertas |
 | `404`  | Oferta no encontrada                | `{"detail": "Oferta with id ... not found"}`              | Verifica que el oferta_id sea correcto                   |
 | `400`  | Pedido ya completado                | `{"detail": "Cannot accept oferta for completed pedido"}` | No se pueden aceptar ofertas de pedidos completados      |
 | `400`  | Pedido ya comprometido              | `{"detail": "Cannot accept oferta for committed pedido"}` | No se pueden aceptar ofertas de pedidos ya comprometidos |
@@ -2049,7 +2104,7 @@ GET /api/v1/ofertas/mis-ofertas?estado_oferta=rechazada
 
 #### Response Exitoso (200)
 
-Estructura con información anidada del pedido y etapa:
+Estructura con información anidada del pedido, etapa y proyecto:
 
 ```json
 [
@@ -2074,7 +2129,15 @@ Estructura con información anidada del pedido y etapa:
 			"etapa": {
 				"id": "223e4567-e89b-12d3-a456-426614174111",
 				"nombre": "Fase 1: Diseño",
-				"estado": "pendiente"
+				"estado": "pendiente",
+				"proyecto": {
+					"id": "123e4567-e89b-12d3-a456-426614174000",
+					"titulo": "Centro Comunitario Barrio Norte",
+					"tipo": "Infraestructura Social",
+					"ciudad": "La Plata",
+					"provincia": "Buenos Aires",
+					"estado": "pendiente"
+				}
 			}
 		}
 	},
@@ -2099,7 +2162,15 @@ Estructura con información anidada del pedido y etapa:
 			"etapa": {
 				"id": "223e4567-e89b-12d3-a456-426614174222",
 				"nombre": "Fase 2: Construcción",
-				"estado": "financiada"
+				"estado": "financiada",
+				"proyecto": {
+					"id": "123e4567-e89b-12d3-a456-426614174001",
+					"titulo": "Comedor Escolar Rosario Norte",
+					"tipo": "Infraestructura Social",
+					"ciudad": "Rosario",
+					"provincia": "Santa Fe",
+					"estado": "en_ejecucion"
+				}
 			}
 		}
 	}
@@ -2136,13 +2207,25 @@ Estructura con información anidada del pedido y etapa:
 | `unidad`     | string (nullable)    | Unidad de medida                   |
 | `etapa`      | EtapaBasicInfo       | **Información anidada de la etapa**|
 
-**EtapaBasicInfo:**
+**EtapaDetailedInfo:**
 
-| Campo   | Tipo   | Descripción                          |
-| ------- | ------ | ------------------------------------ |
-| `id`    | UUID   | ID de la etapa                       |
-| `nombre`| string | Nombre/título de la etapa            |
-| `estado`| string | Estado: pendiente, financiada, etc   |
+| Campo      | Tipo                    | Descripción                                  |
+| ---------- | ----------------------- | -------------------------------------------- |
+| `id`       | UUID                    | ID de la etapa                               |
+| `nombre`   | string                  | Nombre/título de la etapa                    |
+| `estado`   | string                  | Estado: pendiente, financiada, etc           |
+| `proyecto` | ProyectoDetailedInfo    | **Información anidada del proyecto (ver debajo)** |
+
+**ProyectoDetailedInfo:**
+
+| Campo     | Tipo   | Descripción                                |
+| --------- | ------ | ------------------------------------------ |
+| `id`      | UUID   | ID del proyecto                            |
+| `titulo`  | string | Título del proyecto                        |
+| `tipo`    | string | Tipo: Infraestructura, Educación, etc      |
+| `ciudad`  | string | Ciudad donde se ejecuta el proyecto        |
+| `provincia` | string | Provincia/Estado del proyecto             |
+| `estado`  | string | Estado: pendiente, en_ejecucion, finalizado |
 
 #### Errores Posibles
 
@@ -2389,7 +2472,185 @@ curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/projects/$PR
 
 ---
 
-### 3️⃣ Resolver Observación
+### 3️⃣ Listar Todas las Observaciones (Global)
+
+Obtiene todas las observaciones con filtrado avanzado, búsqueda, ordenamiento y paginación. Perfecto para dashboards y reportes.
+
+**Método:** `GET`
+**Ruta:** `/api/v1/observaciones`
+**Autenticación:** Requerida (Bearer Token)
+**Código de Respuesta:** `200 OK`
+
+#### Autorización Automática
+
+- **COUNCIL users:** Ven todas las observaciones que crearon
+- **MEMBER users:** Ven solo observaciones para sus propios proyectos (como ejecutor)
+
+#### Query Parameters (Paginación)
+
+| Parámetro   | Tipo | Requerido | Default | Descripción                              |
+| ----------- | ---- | --------- | ------- | ---------------------------------------- |
+| `page`      | int  | No        | 1       | Número de página (mínimo 1)              |
+| `page_size` | int  | No        | 20      | Resultados por página (máximo 100)       |
+
+#### Query Parameters (Filtrado)
+
+| Parámetro         | Tipo   | Requerido | Default | Descripción                                                     |
+| ----------------- | ------ | --------- | ------- | --------------------------------------------------------------- |
+| `estado`          | string | No        | -       | Filtrar por estado (pendiente, resuelta, vencida)               |
+| `proyecto_id`     | UUID   | No        | -       | Filtrar por proyecto específico                                 |
+| `council_user_id` | UUID   | No        | -       | Filtrar por consejero que creó la observación                   |
+| `search`          | string | No        | -       | Buscar en descripción y respuesta (mínimo 3 caracteres)         |
+| `fecha_desde`     | date   | No        | -       | Observaciones creadas después de esta fecha (formato: YYYY-MM-DD) |
+| `fecha_hasta`     | date   | No        | -       | Observaciones creadas antes de esta fecha (formato: YYYY-MM-DD)   |
+
+#### Query Parameters (Ordenamiento)
+
+| Parámetro   | Tipo   | Requerido | Default      | Descripción                                                                      |
+| ----------- | ------ | --------- | ------------ | -------------------------------------------------------------------------------- |
+| `sort_by`   | string | No        | created_at   | Campo por ordenar (created_at, fecha_limite, fecha_resolucion, updated_at)       |
+| `sort_order` | string | No        | desc         | Orden (asc para ascendente, desc para descendente)                               |
+
+#### Response Exitoso (200)
+
+```json
+{
+  "items": [
+    {
+      "id": "623e4567-e89b-12d3-a456-426614174555",
+      "proyecto_id": "123e4567-e89b-12d3-a456-426614174000",
+      "council_user_id": "550e8400-e29b-41d4-a716-446655440003",
+      "descripcion": "Se observa que el presupuesto destinado a materiales no incluye costos de transporte.",
+      "estado": "pendiente",
+      "fecha_limite": "2025-01-25",
+      "respuesta": null,
+      "fecha_resolucion": null,
+      "created_at": "2025-01-20T10:00:00+00:00",
+      "updated_at": "2025-01-20T10:00:00+00:00",
+      "proyecto": {
+        "id": "123e4567-e89b-12d3-a456-426614174000",
+        "titulo": "Sistema de Riego Comunitario",
+        "estado": "en_ejecucion"
+      },
+      "council_user": {
+        "id": "550e8400-e29b-41d4-a716-446655440003",
+        "email": "consejero@ejemplo.com",
+        "ong": "ONG de Desarrollo",
+        "nombre": "Juan García"
+      },
+      "executor_user": {
+        "id": "660e8400-e29b-41d4-a716-446655440004",
+        "email": "ejecutor@ong.org",
+        "ong": "Fundación Esperanza",
+        "nombre": "María López"
+      }
+    }
+  ],
+  "total": 145,
+  "page": 1,
+  "page_size": 20,
+  "pages": 8
+}
+```
+
+#### Ejemplos de Uso
+
+**1. Obtener todas las observaciones del usuario (con paginación)**
+
+```
+GET /api/v1/observaciones?page=1&page_size=20
+```
+
+**2. Observaciones pendientes ordenadas por urgencia (más urgentes primero)**
+
+```
+GET /api/v1/observaciones?estado=pendiente&sort_by=fecha_limite&sort_order=asc&page=1&page_size=20
+```
+
+**3. Observaciones de un proyecto específico**
+
+```
+GET /api/v1/observaciones?proyecto_id=123e4567-e89b-12d3-a456-426614174000&page=1
+```
+
+**4. Buscar observaciones sobre presupuesto**
+
+```
+GET /api/v1/observaciones?search=presupuesto&page=1&page_size=20
+```
+
+**5. Observaciones vencidas ordenadas por antigüedad**
+
+```
+GET /api/v1/observaciones?estado=vencida&sort_by=fecha_limite&sort_order=asc
+```
+
+**6. Observaciones creadas en enero 2025**
+
+```
+GET /api/v1/observaciones?fecha_desde=2025-01-01&fecha_hasta=2025-01-31&page=1
+```
+
+**7. Observaciones creadas por un consejero específico**
+
+```
+GET /api/v1/observaciones?council_user_id=550e8400-e29b-41d4-a716-446655440003&page=1
+```
+
+#### Errores Posibles
+
+| Código | Descripción                  | Ejemplo de Error                                                              | Solución                                                    |
+| ------ | ---------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `401`  | Token inválido o faltante    | `{"detail": "Invalid or expired token"}`                                    | Proporciona un access_token válido                          |
+| `400`  | Parámetro de filtro inválido | `{"detail": "Invalid estado filter. Must be one of: ['pendiente', 'resuelta', 'vencida']"}` | Usa valores válidos para los parámetros de filtro           |
+| `422`  | Validación de parámetros     | `{"detail": [{"loc": ["query", "page"], "msg": "ensure this value is >= 1"}]}` | Verifica que los parámetros sean válidos (page >= 1, etc)   |
+
+#### Instrucciones para Probar
+
+**Opción 1: Swagger UI (Recomendado)**
+
+1. Abre: `https://project-planning-cloud-api.onrender.com/docs`
+2. Busca "GET /api/v1/observaciones"
+3. Click "Try it out"
+4. Ajusta los parámetros según necesites:
+   - Para ver observaciones pendientes: estado = "pendiente"
+   - Para ordenar por urgencia: sort_by = "fecha_limite", sort_order = "asc"
+   - Para buscar: search = "presupuesto"
+5. Click "Execute"
+
+**Opción 2: cURL**
+
+```bash
+# Todas las observaciones (página 1)
+TOKEN="tu_access_token_aqui"
+curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/observaciones?page=1&page_size=20" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Observaciones pendientes ordenadas por urgencia
+curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/observaciones?estado=pendiente&sort_by=fecha_limite&sort_order=asc&page=1" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Buscar observaciones sobre presupuesto
+curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/observaciones?search=presupuesto&page=1&page_size=20" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Observaciones de un proyecto específico
+PROJECT_ID="123e4567-e89b-12d3-a456-426614174000"
+curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/observaciones?proyecto_id=$PROJECT_ID&page=1" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Observaciones vencidas
+curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/observaciones?estado=vencida&sort_by=fecha_limite&sort_order=asc" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Observaciones del último mes
+curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/observaciones?fecha_desde=2025-01-01&fecha_hasta=2025-01-31&page=1" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+### 4️⃣ Resolver Observación
 
 Permite al ejecutor del proyecto (dueño) resolver una observación proporcionando una respuesta. Se puede resolver incluso si está vencida.
 
@@ -2675,6 +2936,10 @@ Todos los campos son opcionales:
 
 Obtiene los detalles de una oferta específica.
 
+La respuesta ahora incluye contexto adicional:
+- `pedido`: identifica el pedido y enlaza con la etapa y el proyecto del que depende.
+- `proyecto`: expone los datos mínimos para rastrear el caso en Bonita (incluyendo `bonita_case_id`), además de metadatos útiles como título y estado.
+
 **Método:** `GET`
 **Ruta:** `/api/v1/ofertas/{oferta_id}`
 **Autenticación:** Requerida (Bearer Token)
@@ -2697,7 +2962,18 @@ Obtiene los detalles de una oferta específica.
 	"monto_ofrecido": 14500.0,
 	"estado": "pendiente",
 	"created_at": "2024-10-22T15:00:00+00:00",
-	"updated_at": "2024-10-22T15:00:00+00:00"
+	"updated_at": "2024-10-22T15:00:00+00:00",
+	"pedido": {
+		"id": "423e4567-e89b-12d3-a456-426614174333",
+		"etapa_id": "6f27a753-a785-4fef-8e26-24f44da8b451",
+		"proyecto_id": "3185cc5d-e3a6-45cf-85c3-428f36a6d414"
+	},
+	"proyecto": {
+		"id": "3185cc5d-e3a6-45cf-85c3-428f36a6d414",
+		"bonita_case_id": "CASE-982345",
+		"titulo": "Refacción de centro comunitario",
+		"estado": "pendiente"
+	}
 }
 ```
 
@@ -2805,7 +3081,7 @@ Sin contenido (No Content)
 
 ### 1️⃣ Obtener Etapa Específica
 
-Obtiene los detalles de una etapa específica.
+Obtiene los detalles completos de una etapa específica incluyendo todos sus pedidos anidados.
 
 **Método:** `GET`
 **Ruta:** `/api/v1/etapas/{etapa_id}`
@@ -2829,8 +3105,21 @@ Obtiene los detalles de una etapa específica.
 	"fecha_inicio": "2024-11-01",
 	"fecha_fin": "2024-12-31",
 	"estado": "pendiente",
-	"pendientes_count": 3,
-	"total_pedidos": 5
+	"fecha_completitud": null,
+	"bonita_case_id": null,
+	"bonita_process_instance_id": null,
+	"pedidos": [
+		{
+			"id": "323e4567-e89b-12d3-a456-426614174222",
+			"descripcion": "Presupuesto para diseño arquitectónico",
+			"tipo": "economico",
+			"estado": "PENDIENTE",
+			"monto": 15000.0,
+			"moneda": "ARS",
+			"cantidad": null,
+			"unidad": null
+		}
+	]
 }
 ```
 
@@ -2840,6 +3129,210 @@ Obtiene los detalles de una etapa específica.
 | ------ | ------------------------- | ---------------------------------------------------------- | ------------------------------------ |
 | `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`                   | Proporciona un access_token válido   |
 | `404`  | Etapa no encontrada       | `{"detail": "Etapa with id ... not found"}`                | Verifica que el etapa_id sea correcto |
+
+#### cURL
+
+```bash
+TOKEN="tu_access_token_aqui"
+ETAPA_ID="223e4567-e89b-12d3-a456-426614174111"
+
+curl -X GET https://project-planning-cloud-api.onrender.com/api/v1/etapas/$ETAPA_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+### 2️⃣ Actualizar Etapa (PATCH)
+
+Actualización parcial de una etapa. Permite cambiar cualquier campo de forma opcional (ideal para actualizaciones de Bonita desde conectores).
+
+**Método:** `PATCH`
+**Ruta:** `/api/v1/etapas/{etapa_id}`
+**Autenticación:** Requerida (Bearer Token o X-API-Key para Bonita)
+**Código de Respuesta:** `200 OK`
+**Restricción:** Solo el propietario del proyecto puede actualizar (Bonita se autentica via API key)
+
+#### Path Parameters
+
+| Parámetro  | Tipo | Descripción    |
+| ---------- | ---- | -------------- |
+| `etapa_id` | UUID | ID de la etapa |
+
+#### Request Body (todos los campos opcionales)
+
+```json
+{
+	"nombre": "Fase 1: Cimientos - Actualizado",
+	"descripcion": "Nueva descripción de la etapa",
+	"fecha_inicio": "2024-11-15",
+	"fecha_fin": "2025-01-15",
+	"bonita_case_id": "1234567890",
+	"bonita_process_instance_id": 5
+}
+```
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "223e4567-e89b-12d3-a456-426614174111",
+	"proyecto_id": "123e4567-e89b-12d3-a456-426614174000",
+	"nombre": "Fase 1: Cimientos - Actualizado",
+	"descripcion": "Nueva descripción de la etapa",
+	"fecha_inicio": "2024-11-15",
+	"fecha_fin": "2025-01-15",
+	"estado": "pendiente",
+	"fecha_completitud": null,
+	"bonita_case_id": "1234567890",
+	"bonita_process_instance_id": 5,
+	"pedidos": []
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción                      | Ejemplo de Error                                                  | Solución                                          |
+| ------ | -------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------- |
+| `401`  | Token inválido o faltante        | `{"detail": "Invalid or expired token"}`                          | Proporciona un access_token válido o X-API-Key   |
+| `403`  | No eres el propietario           | `{"detail": "Only the project owner can update this etapa"}`      | Solo el dueño del proyecto puede actualizar      |
+| `404`  | Etapa no encontrada              | `{"detail": "Etapa with id ... not found"}`                       | Verifica que el etapa_id sea correcto             |
+| `422`  | Validación fallida               | `{"detail": "fecha_fin must be >= fecha_inicio"}`                | Las fechas son inválidas                          |
+
+#### cURL con JWT
+
+```bash
+TOKEN="tu_access_token_aqui"
+ETAPA_ID="223e4567-e89b-12d3-a456-426614174111"
+
+curl -X PATCH https://project-planning-cloud-api.onrender.com/api/v1/etapas/$ETAPA_ID \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bonita_case_id": "1234567890",
+    "bonita_process_instance_id": 5
+  }'
+```
+
+#### cURL con Bonita API Key
+
+```bash
+API_KEY="tu_bonita_api_key_aqui"
+ETAPA_ID="223e4567-e89b-12d3-a456-426614174111"
+
+curl -X PATCH https://project-planning-cloud-api.onrender.com/api/v1/etapas/$ETAPA_ID \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bonita_case_id": "1234567890",
+    "bonita_process_instance_id": 5
+  }'
+```
+
+---
+
+### 3️⃣ Reemplazar Etapa (PUT)
+
+Reemplazo completo de una etapa. Todos los campos principales son requeridos (ideal para conectores de Bonita que no soportan PATCH).
+
+**Método:** `PUT`
+**Ruta:** `/api/v1/etapas/{etapa_id}`
+**Autenticación:** Requerida (Bearer Token o X-API-Key para Bonita)
+**Código de Respuesta:** `200 OK`
+**Restricción:** Solo el propietario del proyecto puede reemplazar (Bonita se autentica via API key)
+
+#### Path Parameters
+
+| Parámetro  | Tipo | Descripción    |
+| ---------- | ---- | -------------- |
+| `etapa_id` | UUID | ID de la etapa |
+
+#### Request Body (campos requeridos marcados con *)
+
+```json
+{
+	"nombre": "*Fase 1: Cimientos",
+	"descripcion": "*Construcción de cimientos y preparación",
+	"fecha_inicio": "*2024-11-01",
+	"fecha_fin": "*2025-01-31",
+	"bonita_case_id": "1234567890",
+	"bonita_process_instance_id": 5
+}
+```
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "223e4567-e89b-12d3-a456-426614174111",
+	"proyecto_id": "123e4567-e89b-12d3-a456-426614174000",
+	"nombre": "Fase 1: Cimientos",
+	"descripcion": "Construcción de cimientos y preparación",
+	"fecha_inicio": "2024-11-01",
+	"fecha_fin": "2025-01-31",
+	"estado": "pendiente",
+	"fecha_completitud": null,
+	"bonita_case_id": "1234567890",
+	"bonita_process_instance_id": 5,
+	"pedidos": []
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción                      | Ejemplo de Error                                                  | Solución                                          |
+| ------ | -------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------- |
+| `401`  | Token inválido o faltante        | `{"detail": "Invalid or expired token"}`                          | Proporciona un access_token válido o X-API-Key   |
+| `403`  | No eres el propietario           | `{"detail": "Only the project owner can replace this etapa"}`     | Solo el dueño del proyecto puede reemplazar      |
+| `404`  | Etapa no encontrada              | `{"detail": "Etapa with id ... not found"}`                       | Verifica que el etapa_id sea correcto             |
+| `422`  | Validación fallida               | `{"detail": [{"loc": [...], "msg": "field required", ...}]}`      | Asegúrate de enviar todos los campos requeridos   |
+
+#### cURL con JWT
+
+```bash
+TOKEN="tu_access_token_aqui"
+ETAPA_ID="223e4567-e89b-12d3-a456-426614174111"
+
+curl -X PUT https://project-planning-cloud-api.onrender.com/api/v1/etapas/$ETAPA_ID \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Fase 1: Cimientos",
+    "descripcion": "Construcción de cimientos y preparación",
+    "fecha_inicio": "2024-11-01",
+    "fecha_fin": "2025-01-31",
+    "bonita_case_id": "1234567890",
+    "bonita_process_instance_id": 5
+  }'
+```
+
+#### cURL con Bonita API Key
+
+```bash
+API_KEY="tu_bonita_api_key_aqui"
+ETAPA_ID="223e4567-e89b-12d3-a456-426614174111"
+
+curl -X PUT https://project-planning-cloud-api.onrender.com/api/v1/etapas/$ETAPA_ID \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Fase 1: Cimientos",
+    "descripcion": "Construcción de cimientos y preparación",
+    "fecha_inicio": "2024-11-01",
+    "fecha_fin": "2025-01-31",
+    "bonita_case_id": "1234567890",
+    "bonita_process_instance_id": 5
+  }'
+```
+
+#### Comparación: PATCH vs PUT
+
+| Aspecto | PATCH | PUT |
+|---------|-------|-----|
+| **Tipo de Actualización** | Parcial (solo campos enviados) | Completa (reemplaza todo) |
+| **Campos Requeridos** | Todos opcionales | Core requeridos |
+| **Caso de Uso** | Actualizaciones selectivas | Reemplazo total |
+| **Compatible Bonita** | No (sin conector PATCH) | Sí (conector estándar) |
+| **Validación Dates** | Si ambos presentes | Siempre |
 
 ---
 

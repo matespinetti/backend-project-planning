@@ -94,10 +94,20 @@ async def get_current_user(
     FastAPI dependency that validates the Authorization header and
     returns the authenticated user context.
     """
+    logger.info(f"[AUTH DEBUG] get_current_user called. Has credentials: {credentials is not None}")
+
     if not credentials:
+        logger.warning("[AUTH DEBUG] Missing Authorization header")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing Authorization header",
         )
 
-    return decode_access_token(credentials.credentials)
+    logger.info(f"[AUTH DEBUG] Token received (first 20 chars): {credentials.credentials[:20]}...")
+    try:
+        user = decode_access_token(credentials.credentials)
+        logger.info(f"[AUTH DEBUG] Token decoded successfully for user: {user.user_id}")
+        return user
+    except HTTPException as e:
+        logger.error(f"[AUTH DEBUG] Token validation failed: {e.detail}")
+        raise

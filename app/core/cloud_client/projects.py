@@ -297,3 +297,45 @@ class CloudProjectClientMixin(CloudAPIBaseClient):
         except Exception as e:
             logger.exception(f"Unexpected error updating Cloud API: {e}")
             return False
+
+    async def start_project(
+        self, project_id: str, access_token: str
+    ) -> Tuple[Optional[Any], int]:
+        """
+        Start a project (transition from pendiente to en_ejecucion).
+        Called by Bonita when all etapas are fully funded.
+
+        Returns:
+            Tuple of (response_data, status_code)
+        """
+        try:
+            url = f"{self.base_url}/api/v1/projects/{project_id}/start"
+
+            logger.info(f"Starting proyecto {project_id} via Cloud API")
+
+            resp = await self.client.post(url, headers=self._headers(access_token))
+
+            if resp.status_code == 200:
+                data = resp.json()
+                logger.info(f"Successfully started proyecto {project_id}")
+                return data, resp.status_code
+
+            logger.error(
+                f"Cloud API start project failed: {resp.status_code} - {resp.text[:500]}"
+            )
+            # Return error detail from Cloud API
+            try:
+                error_data = resp.json()
+                return error_data, resp.status_code
+            except Exception:
+                return {"detail": resp.text[:500]}, resp.status_code
+
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout starting project {project_id} after {self.timeout}s: {e}")
+            return {"detail": "Timeout contacting Cloud API"}, 504
+        except httpx.RequestError as e:
+            logger.error(f"Network error starting project {project_id}: {e}")
+            return {"detail": "Failed to reach Cloud API"}, 502
+        except Exception as e:
+            logger.exception(f"Unexpected error starting project {project_id}: {e}")
+            return {"detail": "Unexpected error"}, 500

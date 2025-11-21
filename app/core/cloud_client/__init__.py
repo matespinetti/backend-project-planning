@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.core.cloud_client.auth import CloudAuthClientMixin
 from app.core.cloud_client.etapas import CloudEtapaClientMixin
 from app.core.cloud_client.metrics import CloudMetricsClientMixin
+from app.core.cloud_client.observaciones import CloudObservacionClientMixin
 from app.core.cloud_client.pedidos import CloudPedidoClientMixin
 from app.core.cloud_client.projects import CloudProjectClientMixin
 from app.core.cloud_client.users import CloudUserClientMixin
@@ -17,6 +18,7 @@ class CloudAPIClient(
     CloudMetricsClientMixin,
     CloudUserClientMixin,
     CloudEtapaClientMixin,
+    CloudObservacionClientMixin,
 ):
     """
     Aggregates individual domain mixins into a single facade to keep

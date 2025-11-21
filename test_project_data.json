@@ -1,0 +1,78 @@
+{
+  "proyecto": {
+    "id": "ddd24a21-634c-4a18-90d6-e43891b780b8",
+    "titulo": "Centro Comunitario Testeable",
+    "descripcion": "Centro comunitario con sal\u00f3n multiuso y cocina para 250 familias. Proyecto de demostraci\u00f3n para testing.",
+    "tipo": "Infraestructura Social",
+    "pais": "Argentina",
+    "provincia": "Buenos Aires",
+    "ciudad": "La Plata",
+    "barrio": "Barrio Norte Test",
+    "estado": "pendiente",
+    "bonita_case_id": "8066",
+    "bonita_process_instance_id": 0,
+    "created_at": "2025-11-21T20:43:14.901715Z",
+    "updated_at": "2025-11-21T20:43:14.901715Z",
+    "etapas": [
+      {
+        "id": "f52332c5-fb4c-4efc-ba40-cd9d82a43858",
+        "nombre": "Fundaciones y Estructura",
+        "descripcion": "Excavaci\u00f3n, cimientos y estructura de hormig\u00f3n armado para la base del centro",
+        "fecha_inicio": "2025-11-21",
+        "fecha_fin": "2026-02-19",
+        "proyecto_id": "ddd24a21-634c-4a18-90d6-e43891b780b8",
+        "estado": "pendiente",
+        "bonita_case_id": null,
+        "bonita_process_instance_id": null,
+        "fecha_completitud": null,
+        "pedidos": [
+          {
+            "id": "f0cc5a68-2a62-4f59-b66f-b9417eaac9d3",
+            "tipo": "economico",
+            "descripcion": "Cemento, hierro, arena y piedra para cimientos",
+            "estado": "PENDIENTE",
+            "monto": 180000.0,
+            "moneda": "ARS",
+            "cantidad": null,
+            "unidad": null,
+            "etapa_id": "f52332c5-fb4c-4efc-ba40-cd9d82a43858",
+            "proyecto_id": null,
+            "created_at": null,
+            "updated_at": null
+          }
+        ]
+      },
+      {
+        "id": "06621867-dfc1-4dd7-886c-e79036dfba31",
+        "nombre": "Construcci\u00f3n de Paredes y Techo",
+        "descripcion": "Levantamiento de paredes de carga, instalaci\u00f3n de techo y aberturas",
+        "fecha_inicio": "2026-02-20",
+        "fecha_fin": "2026-05-20",
+        "proyecto_id": "ddd24a21-634c-4a18-90d6-e43891b780b8",
+        "estado": "pendiente",
+        "bonita_case_id": null,
+        "bonita_process_instance_id": null,
+        "fecha_completitud": null,
+        "pedidos": [
+          {
+            "id": "60838410-08e5-4cfe-8323-05f76adac1a8",
+            "tipo": "economico",
+            "descripcion": "Materiales para paredes y techo (ladrillos, cemento, hierro)",
+            "estado": "PENDIENTE",
+            "monto": 250000.0,
+            "moneda": "ARS",
+            "cantidad": null,
+            "unidad": null,
+            "etapa_id": "06621867-dfc1-4dd7-886c-e79036dfba31",
+            "proyecto_id": null,
+            "created_at": null,
+            "updated_at": null
+          }
+        ]
+      }
+    ]
+  },
+  "bonita_case_id": "8066",
+  "bonita_process_url": "http://192.168.32.1:8880/bonita/portal/resource/processInstance/8066/content/",
+  "message": "Proyecto creado exitosamente e iniciado en Bonita"
+}

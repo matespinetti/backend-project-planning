@@ -12,7 +12,12 @@ from app.schemas.etapa import (
     EtapaResponse,
     EtapasListResponse,
 )
-from app.schemas.observacion import ObservacionResponse
+from app.schemas.observacion import (
+    ObservacionListItem,
+    ObservacionResolveRequest,
+    ObservacionResponse,
+    ObservacionesPaginatedResponse,
+)
 from app.schemas.metrics import (
     MetricsCommitmentContributor,
     MetricsCommitmentsResponse,
@@ -50,6 +55,9 @@ __all__ = [
     "OfertaConfirmationResponse",
     "OfertaCompromisoResponse",
     "ObservacionResponse",
+    "ObservacionListItem",
+    "ObservacionesPaginatedResponse",
+    "ObservacionResolveRequest",
     "MetricsDashboardResponse",
     "MetricsProjectTrackingResponse",
     "MetricsProjectStageStatus",

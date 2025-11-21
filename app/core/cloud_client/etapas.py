@@ -29,3 +29,21 @@ class CloudEtapaClientMixin(CloudAPIBaseClient):
         except Exception as exc:
             logger.exception("Unexpected error fetching etapa %s: %s", etapa_id, exc)
             return {"detail": "Unexpected error fetching etapa"}, 500
+
+    async def start_etapa(
+        self, etapa_id: str, access_token: str
+    ) -> Tuple[Optional[Any], int]:
+        """Start an etapa (transition to en_ejecucion state)."""
+        url = f"{self.base_url}/api/v1/etapas/{etapa_id}/start"
+        try:
+            resp = await self.client.post(url, headers=self._headers(access_token))
+            return self._parse_json_response(resp)
+        except httpx.TimeoutException as exc:
+            logger.error("Timeout starting etapa %s after %ss: %s", etapa_id, self.timeout, exc)
+            return {"detail": "Timeout contacting Cloud API"}, 504
+        except httpx.RequestError as exc:
+            logger.error("Network error starting etapa %s: %s", etapa_id, exc)
+            return {"detail": "Failed to reach Cloud API"}, 502
+        except Exception as exc:
+            logger.exception("Unexpected error starting etapa %s: %s", etapa_id, exc)
+            return {"detail": "Unexpected error starting etapa"}, 500
