@@ -924,6 +924,148 @@ curl -X PATCH https://project-planning-cloud-api.onrender.com/api/v1/projects/$P
 
 ---
 
+### 4️⃣.1️⃣ Reemplazar Proyecto (Completo)
+
+Reemplaza completamente un proyecto usando PUT. Este endpoint es útil para Bonita, que **no soporta PATCH** pero solo GET, POST y PUT.
+
+**Método:** `PUT`
+**Ruta:** `/api/v1/projects/{project_id}`
+**Autenticación:** Requerida (Bearer Token o X-API-Key para Bonita)
+**Código de Respuesta:** `200 OK`
+**Restricción:** Solo el propietario del proyecto O Bonita (via X-API-Key) puede reemplazarlo
+
+#### Path Parameters
+
+| Parámetro    | Tipo | Descripción                    |
+| ------------ | ---- | ------------------------------ |
+| `project_id` | UUID | ID del proyecto a reemplazar   |
+
+#### Campos Obligatorios
+
+| Campo       | Tipo   | Descripción                  |
+| ----------- | ------ | ---------------------------- |
+| `titulo`    | string | Título del proyecto          |
+| `descripcion` | string | Descripción del proyecto     |
+| `tipo`      | string | Tipo de proyecto             |
+| `pais`      | string | País                         |
+| `provincia` | string | Provincia/Estado             |
+| `ciudad`    | string | Ciudad                       |
+
+#### Campos Opcionales
+
+| Campo                        | Tipo    | Descripción            |
+| ---------------------------- | ------- | ---------------------- |
+| `barrio`                     | string  | Barrio/Localidad       |
+| `estado`                     | enum    | Estado del proyecto    |
+| `bonita_case_id`             | string  | ID de caso Bonita      |
+| `bonita_process_instance_id` | integer | ID de instancia Bonita |
+
+#### Body de Prueba
+
+```json
+{
+	"titulo": "Centro Comunitario La Plata",
+	"descripcion": "Construcción de un nuevo centro comunitario con servicios sociales",
+	"tipo": "Infraestructura Social",
+	"pais": "Argentina",
+	"provincia": "Buenos Aires",
+	"ciudad": "La Plata",
+	"barrio": "Centro",
+	"estado": "en_ejecucion",
+	"bonita_case_id": "CASE-2024-001",
+	"bonita_process_instance_id": 12345
+}
+```
+
+#### Response Exitoso (200)
+
+Retorna el proyecto reemplazado completamente con todos sus datos:
+
+```json
+{
+	"id": "123e4567-e89b-12d3-a456-426614174000",
+	"user_id": "550e8400-e29b-41d4-a716-446655440000",
+	"titulo": "Centro Comunitario La Plata",
+	"descripcion": "Construcción de un nuevo centro comunitario con servicios sociales",
+	"tipo": "Infraestructura Social",
+	"pais": "Argentina",
+	"provincia": "Buenos Aires",
+	"ciudad": "La Plata",
+	"barrio": "Centro",
+	"estado": "en_ejecucion",
+	"bonita_case_id": "CASE-2024-001",
+	"bonita_process_instance_id": 12345,
+	"created_at": "2024-10-22T14:30:00+00:00",
+	"updated_at": "2024-10-22T14:30:00+00:00",
+	"etapas": [...]
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción               | Ejemplo de Error                                                                                                           | Solución                                      |
+| ------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`                                                                                   | Proporciona un access_token válido            |
+| `403`  | No eres el propietario    | `{"detail": "Only the project owner can replace this project"}`                                                             | Solo el dueño del proyecto puede reemplazarlo |
+| `404`  | Proyecto no existe        | `{"detail": "Proyecto with id 123e4567-e89b-12d3-a456-426614174000 not found"}`                                            | Verifica que el project_id sea correcto       |
+| `422`  | Validación fallida        | `{"detail": [{"loc": ["body", "titulo"], "msg": "ensure this value has at least 5 characters", "type": "value_error..."}]}` | Revisa que todos los campos obligatorios estén presentes |
+
+#### Instrucciones para Probar
+
+**Opción 1: Swagger UI (Recomendado)**
+
+1. Abre: `https://project-planning-cloud-api.onrender.com/docs`
+2. Busca "PUT /api/v1/projects/{project_id}"
+3. Click "Try it out"
+4. Pega el UUID en "project_id"
+5. Completa el JSON con todos los campos obligatorios
+6. Click "Execute"
+
+**Opción 2: cURL (Usuario Propietario)**
+
+```bash
+TOKEN="tu_access_token_aqui"
+PROJECT_ID="123e4567-e89b-12d3-a456-426614174000"
+
+curl -X PUT https://project-planning-cloud-api.onrender.com/api/v1/projects/$PROJECT_ID \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "titulo": "Centro Comunitario La Plata",
+    "descripcion": "Construcción de un nuevo centro comunitario con servicios sociales",
+    "tipo": "Infraestructura Social",
+    "pais": "Argentina",
+    "provincia": "Buenos Aires",
+    "ciudad": "La Plata",
+    "estado": "en_ejecucion",
+    "bonita_case_id": "CASE-2024-001"
+  }'
+```
+
+**Opción 3: cURL (Bonita Sistema via X-API-Key)**
+
+```bash
+API_KEY="tu_bonita_api_key_aqui"
+PROJECT_ID="123e4567-e89b-12d3-a456-426614174000"
+
+curl -X PUT https://project-planning-cloud-api.onrender.com/api/v1/projects/$PROJECT_ID \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "titulo": "Centro Comunitario La Plata",
+    "descripcion": "Construcción de un nuevo centro comunitario con servicios sociales",
+    "tipo": "Infraestructura Social",
+    "pais": "Argentina",
+    "provincia": "Buenos Aires",
+    "ciudad": "La Plata",
+    "estado": "en_ejecucion",
+    "bonita_case_id": "CASE-2024-001",
+    "bonita_process_instance_id": 12345
+  }'
+```
+
+---
+
 ### 5️⃣ Eliminar Proyecto
 
 Elimina un proyecto y **toda su estructura anidada** (etapas, pedidos, ofertas).
@@ -2294,9 +2436,11 @@ Crea una nueva observación sobre un proyecto en ejecución. **Solo miembros del
 
 #### Parámetros
 
-| Campo         | Tipo   | Requerido | Descripción                                              |
-| ------------- | ------ | --------- | -------------------------------------------------------- |
-| `descripcion` | string | Sí        | Descripción de la observación (mínimo 10 caracteres)     |
+| Campo                        | Tipo    | Requerido | Descripción                                              |
+| ---------------------------- | ------- | --------- | -------------------------------------------------------- |
+| `descripcion`                | string  | Sí        | Descripción de la observación (mínimo 10 caracteres)     |
+| `bonita_case_id`             | string  | No        | ID de caso Bonita para rastreo de workflow               |
+| `bonita_process_instance_id` | integer | No        | ID de instancia de proceso Bonita                        |
 
 #### Comportamiento Automático
 
@@ -2308,7 +2452,9 @@ Crea una nueva observación sobre un proyecto en ejecución. **Solo miembros del
 
 ```json
 {
-	"descripcion": "Se observa que el presupuesto destinado a materiales no incluye costos de transporte. Por favor revisar y ajustar el presupuesto según lo conversado en la reunión del consejo."
+	"descripcion": "Se observa que el presupuesto destinado a materiales no incluye costos de transporte. Por favor revisar y ajustar el presupuesto según lo conversado en la reunión del consejo.",
+	"bonita_case_id": "CASE-2024-001",
+	"bonita_process_instance_id": 12345
 }
 ```
 
@@ -2324,6 +2470,8 @@ Crea una nueva observación sobre un proyecto en ejecución. **Solo miembros del
 	"fecha_limite": "2024-10-27",
 	"respuesta": null,
 	"fecha_resolucion": null,
+	"bonita_case_id": "CASE-2024-001",
+	"bonita_process_instance_id": 12345,
 	"created_at": "2024-10-22T10:00:00+00:00",
 	"updated_at": "2024-10-22T10:00:00+00:00"
 }
@@ -2408,6 +2556,8 @@ Obtiene todas las observaciones de un proyecto, con información del consejero q
 		"fecha_limite": "2024-10-27",
 		"respuesta": null,
 		"fecha_resolucion": null,
+		"bonita_case_id": "CASE-2024-001",
+		"bonita_process_instance_id": 12345,
 		"created_at": "2024-10-22T10:00:00+00:00",
 		"updated_at": "2024-10-22T10:00:00+00:00",
 		"council_user_email": "consejo@ong.org",
@@ -2421,6 +2571,8 @@ Obtiene todas las observaciones de un proyecto, con información del consejero q
 		"descripcion": "El cronograma de la etapa 2 parece muy ajustado. Considerar ampliar plazos.",
 		"estado": "resuelta",
 		"fecha_limite": "2024-10-20",
+		"bonita_case_id": null,
+		"bonita_process_instance_id": null,
 		"respuesta": "Hemos revisado el cronograma y agregado 2 semanas adicionales a la etapa 2 según su recomendación.",
 		"fecha_resolucion": "2024-10-19T14:30:00+00:00",
 		"created_at": "2024-10-15T10:00:00+00:00",
@@ -2650,14 +2802,197 @@ curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/observacione
 
 ---
 
+### 3️⃣ Obtener Observación Específica
+
+Obtiene los detalles de una observación específica por su ID.
+
+**Método:** `GET`
+**Ruta:** `/api/v1/observaciones/{observacion_id}`
+**Autenticación:** Requerida (Bearer Token)
+**Código de Respuesta:** `200 OK`
+
+#### Path Parameters
+
+| Parámetro        | Tipo | Descripción                   |
+| ---------------- | ---- | ----------------------------- |
+| `observacion_id` | UUID | ID de la observación a obtener |
+
+#### Comportamiento
+
+- Retorna todos los detalles de la observación
+- Automáticamente verifica si está vencida y actualiza estado si es necesario
+- Incluye información del consejero que la creó
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "623e4567-e89b-12d3-a456-426614174555",
+	"proyecto_id": "123e4567-e89b-12d3-a456-426614174000",
+	"council_user_id": "550e8400-e29b-41d4-a716-446655440003",
+	"descripcion": "Se observa que el presupuesto destinado a materiales no incluye costos de transporte.",
+	"estado": "pendiente",
+	"fecha_limite": "2024-10-27",
+	"respuesta": null,
+	"fecha_resolucion": null,
+	"bonita_case_id": "CASE-2024-001",
+	"bonita_process_instance_id": 12345,
+	"created_at": "2024-10-22T10:00:00+00:00",
+	"updated_at": "2024-10-22T10:00:00+00:00"
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción               | Ejemplo de Error                              | Solución                                  |
+| ------ | ------------------------- | --------------------------------------------- | ----------------------------------------- |
+| `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`      | Proporciona un access_token válido        |
+| `404`  | Observación no encontrada | `{"detail": "Observacion with id ... not found"}` | Verifica que el observacion_id sea correcto |
+
+#### Instrucciones para Probar
+
+**Opción 1: Swagger UI (Recomendado)**
+
+1. Abre: `https://project-planning-cloud-api.onrender.com/docs`
+2. Busca "GET /api/v1/observaciones/{observacion_id}"
+3. Click "Try it out"
+4. Pega el UUID de la observación
+5. Click "Execute"
+
+**Opción 2: cURL**
+
+```bash
+TOKEN="tu_access_token_aqui"
+OBSERVACION_ID="623e4567-e89b-12d3-a456-426614174555"
+
+curl -X GET https://project-planning-cloud-api.onrender.com/api/v1/observaciones/$OBSERVACION_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+### 3️⃣.1️⃣ Actualizar Observación
+
+Actualiza parcialmente una observación existente. Solo el consejero que la creó o el dueño del proyecto pueden actualizarla.
+
+**Método:** `PATCH`
+**Ruta:** `/api/v1/observaciones/{observacion_id}`
+**Autenticación:** Requerida (Bearer Token)
+**Autorización:** Solo el consejero que creó la observación o el dueño del proyecto
+**Código de Respuesta:** `200 OK`
+
+#### Path Parameters
+
+| Parámetro        | Tipo | Descripción                   |
+| ---------------- | ---- | ----------------------------- |
+| `observacion_id` | UUID | ID de la observación a actualizar |
+
+#### Campos Actualizables
+
+Todos los campos son opcionales. Solo se actualizan los que proporcionas:
+
+| Campo                        | Tipo    | Descripción                    |
+| ---------------------------- | ------- | ------------------------------ |
+| `descripcion`                | string  | Nueva descripción (mín. 10 caracteres) |
+| `bonita_case_id`             | string  | ID de caso Bonita              |
+| `bonita_process_instance_id` | integer | ID de instancia de proceso Bonita |
+
+#### Nota Importante
+
+Los siguientes campos **NO se pueden modificar** con PATCH:
+- `estado`: Use la resolución o acciones del sistema
+- `respuesta` y `fecha_resolucion`: Use el endpoint `/resolve` para resolver
+- `fecha_limite`, `council_user_id`, `proyecto_id`: Son inmutables
+- `created_at`, `updated_at`: Auto-gestionados por el sistema
+
+#### Body de Prueba
+
+```json
+{
+	"descripcion": "Se observa que el presupuesto necesita ajustes. Revisar con el contable.",
+	"bonita_case_id": "CASE-2024-002"
+}
+```
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "623e4567-e89b-12d3-a456-426614174555",
+	"proyecto_id": "123e4567-e89b-12d3-a456-426614174000",
+	"council_user_id": "550e8400-e29b-41d4-a716-446655440003",
+	"descripcion": "Se observa que el presupuesto necesita ajustes. Revisar con el contable.",
+	"estado": "pendiente",
+	"fecha_limite": "2024-10-27",
+	"respuesta": null,
+	"fecha_resolucion": null,
+	"bonita_case_id": "CASE-2024-002",
+	"bonita_process_instance_id": null,
+	"created_at": "2024-10-22T10:00:00+00:00",
+	"updated_at": "2024-11-21T15:30:00+00:00"
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción                      | Ejemplo de Error                                                                                                              | Solución                                      |
+| ------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `401`  | Token inválido o faltante        | `{"detail": "Invalid or expired token"}`                                                                                      | Proporciona un access_token válido            |
+| `403`  | No tienes permisos para actualizar | `{"detail": "Only the council member who created the observation or the project owner can update it"}`                       | Solo el creador o dueño del proyecto puede actualizar |
+| `404`  | Observación no encontrada        | `{"detail": "Observacion with id ... not found"}`                                                                             | Verifica que el observacion_id sea correcto   |
+| `422`  | Validación fallida               | `{"detail": [{"loc": ["body", "descripcion"], "msg": "ensure this value has at least 10 characters", "type": "value_error"}]}` | Revisa los datos proporcionados              |
+
+#### Instrucciones para Probar
+
+**Opción 1: Swagger UI (Recomendado)**
+
+1. Abre: `https://project-planning-cloud-api.onrender.com/docs`
+2. Busca "PATCH /api/v1/observaciones/{observacion_id}"
+3. Click "Try it out"
+4. Pega el UUID de la observación
+5. Completa el JSON con los campos a actualizar
+6. Click "Execute"
+
+**Opción 2: cURL (Consejero que creó la observación)**
+
+```bash
+TOKEN="token_del_consejero_aqui"
+OBSERVACION_ID="623e4567-e89b-12d3-a456-426614174555"
+
+curl -X PATCH https://project-planning-cloud-api.onrender.com/api/v1/observaciones/$OBSERVACION_ID \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "descripcion": "Se observa que el presupuesto necesita ajustes. Revisar con el contable.",
+    "bonita_case_id": "CASE-2024-002"
+  }'
+```
+
+**Opción 3: cURL (Propietario del proyecto)**
+
+```bash
+TOKEN="token_del_propietario_aqui"
+OBSERVACION_ID="623e4567-e89b-12d3-a456-426614174555"
+
+curl -X PATCH https://project-planning-cloud-api.onrender.com/api/v1/observaciones/$OBSERVACION_ID \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bonita_case_id": "CASE-2024-002",
+    "bonita_process_instance_id": 67890
+  }'
+```
+
+---
+
 ### 4️⃣ Resolver Observación
 
-Permite al ejecutor del proyecto (dueño) resolver una observación proporcionando una respuesta. Se puede resolver incluso si está vencida.
+Permite al ejecutor del proyecto (dueño) resolver una observación proporcionando una respuesta. Se puede resolver incluso si está vencida. Bonita también puede resolver observaciones con bypass X-API-Key.
 
 **Método:** `POST`
 **Ruta:** `/api/v1/observaciones/{observacion_id}/resolve`
-**Autenticación:** Requerida (Bearer Token)
-**Autorización:** Solo el dueño del proyecto asociado
+**Autenticación:** Requerida (Bearer Token o X-API-Key para Bonita)
+**Autorización:** Solo el dueño del proyecto o Bonita (X-API-Key)
 **Código de Respuesta:** `200 OK`
 
 #### Path Parameters
@@ -2708,8 +3043,8 @@ Permite al ejecutor del proyecto (dueño) resolver una observación proporcionan
 
 | Código | Descripción                      | Ejemplo de Error                                                                                          | Solución                                        |
 | ------ | -------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `401`  | Token inválido o faltante        | `{"detail": "Invalid or expired token"}`                                                                  | Proporciona un access_token válido              |
-| `403`  | No eres el dueño del proyecto    | `{"detail": "Only the project executor (owner) can resolve observations"}`                                | Solo el dueño del proyecto puede resolver       |
+| `401`  | Token inválido o faltante        | `{"detail": "Invalid or expired token"}`                                                                  | Proporciona un access_token o X-API-Key válido  |
+| `403`  | No tienes permisos para resolver | `{"detail": "Only the project executor (owner) can resolve observations"}`                                | Solo dueño del proyecto o Bonita puede resolver |
 | `404`  | Observación no encontrada        | `{"detail": "Observacion with id ... not found"}`                                                         | Verifica que el observacion_id sea correcto     |
 | `400`  | Observación ya resuelta          | `{"detail": "Observacion is already resolved"}`                                                           | Esta observación ya fue resuelta anteriormente  |
 | `422`  | Validación fallida               | `{"detail": [{"loc": ["body", "respuesta"], "msg": "ensure this value has at least 10 characters"}]}`     | La respuesta debe tener al menos 10 caracteres  |
@@ -2726,7 +3061,7 @@ Permite al ejecutor del proyecto (dueño) resolver una observación proporcionan
 6. Completa el JSON con tu respuesta
 7. Click "Execute"
 
-**Opción 2: cURL**
+**Opción 2: cURL (Usuario - Propietario del Proyecto)**
 
 ```bash
 # Token del dueño del proyecto
@@ -2739,6 +3074,107 @@ curl -X POST https://project-planning-cloud-api.onrender.com/api/v1/observacione
   -d '{
     "respuesta": "Gracias por la observación. He revisado el presupuesto y agregado una partida para costos de transporte de $500 USD. El documento actualizado está disponible en la sección de archivos."
   }'
+```
+
+**Opción 3: cURL (Bonita System Actor)**
+
+```bash
+# X-API-Key header para Bonita
+API_KEY="your-bonita-api-key"
+OBSERVACION_ID="623e4567-e89b-12d3-a456-426614174555"
+
+curl -X POST https://project-planning-cloud-api.onrender.com/api/v1/observaciones/$OBSERVACION_ID/resolve \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "respuesta": "Observación resuelta automáticamente por proceso Bonita. Revisar detalles en el caso Bonita."
+  }'
+```
+
+---
+
+### 5️⃣ Expirar Observación
+
+Marca una observación como vencida (expirada). Solo el ejecutor del proyecto o Bonita pueden expirar observaciones.
+
+**Método:** `POST`
+**Ruta:** `/api/v1/observaciones/{observacion_id}/expire`
+**Autenticación:** Requerida (Bearer Token)
+**Autorización:** Solo el dueño del proyecto o Bonita (X-API-Key)
+**Código de Respuesta:** `200 OK`
+
+#### Path Parameters
+
+| Parámetro        | Tipo | Descripción                    |
+| ---------------- | ---- | ------------------------------ |
+| `observacion_id` | UUID | ID de la observación a expirar |
+
+#### Comportamiento
+
+- **Cambio de estado:** Cambia automáticamente a `vencida`
+- **No modifica resolución:** No afecta respuesta ni fecha de resolución
+- **Irreversible:** Una vez vencida, solo se puede resolver
+- **Casos de uso:**
+  - Expirar automáticamente cuando pasan 5 días sin resolver
+  - Marcar manualmente una observación como expirada
+
+#### Response Exitoso (200)
+
+```json
+{
+	"id": "623e4567-e89b-12d3-a456-426614174555",
+	"proyecto_id": "123e4567-e89b-12d3-a456-426614174000",
+	"council_user_id": "550e8400-e29b-41d4-a716-446655440003",
+	"descripcion": "Se observa que el presupuesto destinado a materiales no incluye costos de transporte.",
+	"estado": "vencida",
+	"fecha_limite": "2024-10-27",
+	"respuesta": null,
+	"fecha_resolucion": null,
+	"created_at": "2024-10-22T10:00:00+00:00",
+	"updated_at": "2024-10-27T23:59:59+00:00"
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción                           | Ejemplo de Error                                                                      | Solución                                      |
+| ------ | ------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `401`  | Token inválido o faltante             | `{"detail": "Invalid or expired token"}`                                              | Proporciona un access_token válido            |
+| `403`  | No tienes permisos para expirar       | `{"detail": "Only the project executor (owner) or Bonita can expire observations"}` | Solo dueño del proyecto o Bonita puede expirar |
+| `404`  | Observación no encontrada             | `{"detail": "Observacion with id ... not found"}`                                     | Verifica que el observacion_id sea correcto   |
+| `400`  | Observación ya vencida o resuelta     | `{"detail": "Observacion is already expired"}`                                       | La observación ya está vencida o resuelta     |
+
+#### Instrucciones para Probar
+
+**Opción 1: Swagger UI (Recomendado)**
+
+1. Abre: `https://project-planning-cloud-api.onrender.com/docs`
+2. **Importante:** Autentícate con el usuario dueño del proyecto
+3. Busca "POST /api/v1/observaciones/{observacion_id}/expire"
+4. Click "Try it out"
+5. Pega el UUID de la observación
+6. Click "Execute"
+
+**Opción 2: cURL (Usuario - Propietario del Proyecto)**
+
+```bash
+# Token del dueño del proyecto
+TOKEN="tu_access_token_de_ejecutor_aqui"
+OBSERVACION_ID="623e4567-e89b-12d3-a456-426614174555"
+
+curl -X POST https://project-planning-cloud-api.onrender.com/api/v1/observaciones/$OBSERVACION_ID/expire \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Opción 3: cURL (Bonita System Actor)**
+
+```bash
+# X-API-Key header para Bonita
+API_KEY="your-bonita-api-key"
+OBSERVACION_ID="623e4567-e89b-12d3-a456-426614174555"
+
+curl -X POST https://project-planning-cloud-api.onrender.com/api/v1/observaciones/$OBSERVACION_ID/expire \
+  -H "X-API-Key: $API_KEY"
 ```
 
 ---
@@ -2760,17 +3196,29 @@ Este es el flujo típico de trabajo con observaciones:
    • Ve todas las observaciones pendientes
    • Observaciones vencidas aparecen automáticamente marcadas
 
-3. EJECUTOR RESUELVE OBSERVACIÓN
+3a. EJECUTOR RESUELVE OBSERVACIÓN (Opción: Completación Manual)
    POST /api/v1/observaciones/{id}/resolve
    • Requiere ser dueño del proyecto
    • Proporciona respuesta detallada
    • Estado cambia a 'resuelta'
    • Se registra timestamp de resolución
 
+3b. EXPIRAR OBSERVACIÓN (Opción: Vencimiento Automático)
+   POST /api/v1/observaciones/{id}/expire
+   • Requiere ser dueño del proyecto o Bonita
+   • Marca como 'vencida' si no fue resuelta en 5 días
+   • Usado cuando observación supera fecha límite
+   • Bonita puede expirar automáticamente con X-API-Key
+
 4. CONSEJO VERIFICA RESOLUCIÓN
    GET /api/v1/projects/{id}/observaciones?estado=resuelta
    • Puede ver la respuesta del ejecutor
    • Confirma que la observación fue atendida
+
+5. CONSEJO VERIFICA VENCIDAS
+   GET /api/v1/projects/{id}/observaciones?estado=vencida
+   • Ve observaciones que no fueron resueltas a tiempo
+   • Puede realizar seguimiento de incumplimientos
 ```
 
 ### Estados de Observaciones

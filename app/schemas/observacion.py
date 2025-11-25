@@ -7,6 +7,16 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 
+class ObservacionCreate(BaseModel):
+    """Schema for creating a new observacion (council member observation)."""
+
+    model_config = {"extra": "ignore"}
+
+    descripcion: str = Field(
+        ..., min_length=10, description="Descripción de la observación (mínimo 10 caracteres)"
+    )
+
+
 class ObservacionResponse(BaseModel):
     """Represents a council observation entry from the Cloud API."""
 
@@ -23,6 +33,8 @@ class ObservacionResponse(BaseModel):
     council_user_email: Optional[str] = None
     council_user_ong: Optional[str] = None
     council_user_nombre: Optional[str] = None
+    bonita_case_id: Optional[str] = None
+    bonita_process_instance_id: Optional[int] = None
 
 
 class ObservacionProjectInfo(BaseModel):

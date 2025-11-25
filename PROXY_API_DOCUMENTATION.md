@@ -1,6 +1,6 @@
 # ProjectPlanning Proxy API — Documentación de Flujos Bonita
 
-**Versión:** 2.2.0
+**Versión:** 2.3.0
 **Última actualización:** 2025-11-21
 **Alcance:** endpoints que orquestan la Cloud Persistence API y Bonita BPM (no simples proxys)
 
@@ -17,7 +17,9 @@
 7. [Endpoint · Iniciar Etapa ejecutando StartStage](#4️⃣-iniciar-etapa-ejecutando-startstage)
 8. [Endpoint · Completar Etapa ejecutando FinishStage](#5️⃣-completar-etapa-ejecutando-finishstage)
 9. [Endpoint · Finalizar Proyecto ejecutando FinishProject](#6️⃣-finalizar-proyecto-ejecutando-finishproject)
-10. [Códigos de error comunes](#códigos-de-error-comunes)
+10. [Endpoint · Crear Observación + Instanciar ObservationsReviewal](#7️⃣-crear-observación--instanciar-observationsreviewal)
+11. [Endpoint · Resolver Observación ejecutando SolveObservation](#8️⃣-resolver-observación-ejecutando-solveobservation)
+12. [Códigos de error comunes](#códigos-de-error-comunes)
 
 ---
 
@@ -566,6 +568,158 @@ Content-Type: application/json
 | `404`  | Bonita  | No hay tareas *ready* "FinishProject" para ese caseId (ya fue tomada o nunca se generó).              |
 | `500`  | Bonita  | Falló la ejecución de la tarea (error de contrato, sesión, etc.).                                      |
 | `500`  | Proxy   | Bonita ejecutó la tarea pero no se pudo volver a leer el proyecto actualizado (ver logs de Cloud API). |
+
+---
+
+## 7️⃣ Crear Observación + Instanciar ObservationsReviewal
+
+| Propiedad     | Valor                                              |
+| ------------- | -------------------------------------------------- |
+| **Método**    | `POST`                                             |
+| **Ruta**      | `/api/v1/projects/{project_id}/observaciones`     |
+| **Auth**      | JWT Cloud (`Bearer`)                               |
+| **HTTP 201**  | Observación persistida en Cloud API + proceso `ObservationsReviewal` iniciado |
+
+### Precondiciones
+
+- El proyecto debe existir en Cloud API.
+- El proyecto debe estar en estado `en_ejecucion`.
+- El usuario debe ser miembro del consejo (role=COUNCIL).
+- La descripción debe tener mínimo 10 caracteres.
+
+### Flujo detallado
+
+1. **Lectura y validación en Proxy** (`POST /api/v1/projects/{project_id}/observaciones`): validación Pydantic del payload.
+2. **Persistencia en Cloud API:** se envía el payload y se obtiene el `observacion_id` real (estado = `pendiente`, fecha_límite = +5 días automático).
+3. **Arranque de Bonita:** se crea una instancia del proceso `ObservationsReviewal`, enviando `{"observacion_id": "<uuid>"}` como contrato de inicio.
+4. **Actualización en Cloud API:** se parchea la observación con `bonita_case_id` y `bonita_process_instance_id` usando PATCH.
+5. **Sync final:** el proxy vuelve a leer la observación para obtener el estado final.
+6. **Respuesta al frontend:** se devuelve la entidad actualizada + metadata Bonita para tracking.
+
+```
+Frontend ──POST /projects/{id}/observaciones──► Proxy
+Proxy ──POST /api/v1/projects/{id}/observaciones──► Cloud API (crea observación)
+Proxy ──POST /API/bpm/process/{id}/instantiation──► Bonita (recibe observacion_id)
+Proxy ──PATCH /api/v1/observaciones/{id}──► Cloud API (guarda case_id)
+Proxy ──GET /api/v1/projects/{id}/observaciones──► Cloud API (estado final)
+Proxy ◄─201 + observación orquestada── Frontend
+```
+
+### Request Body (`ObservacionCreate`)
+
+```json
+{
+  "descripcion": "Se observa que el presupuesto destinado a materiales no incluye costos de transporte. Por favor revisar y ajustar el presupuesto según lo conversado en la reunión del consejo."
+}
+```
+
+### Respuesta 201 (`ObservacionResponse`)
+
+```json
+{
+  "id": "623e4567-e89b-12d3-a456-426614174555",
+  "proyecto_id": "123e4567-e89b-12d3-a456-426614174000",
+  "council_user_id": "550e8400-e29b-41d4-a716-446655440003",
+  "descripcion": "Se observa que el presupuesto destinado a materiales no incluye costos de transporte. Por favor revisar y ajustar el presupuesto según lo conversado en la reunión del consejo.",
+  "estado": "pendiente",
+  "fecha_limite": "2025-12-20",
+  "respuesta": null,
+  "fecha_resolucion": null,
+  "created_at": "2025-12-15T10:00:00+00:00",
+  "updated_at": "2025-12-15T10:00:00+00:00",
+  "bonita_case_id": "8065",
+  "bonita_process_instance_id": 8065
+}
+```
+
+### Errores frecuentes
+
+| Código | Origen  | Descripción                                                                                           |
+| ------ | ------- | ----------------------------------------------------------------------------------------------------- |
+| `401`  | Cloud   | Token inválido o ausente. Proporciona un access_token válido.                                        |
+| `403`  | Cloud   | Usuario no es del consejo. Solo usuarios con role=COUNCIL pueden crear observaciones.               |
+| `404`  | Cloud   | No existe el proyecto consultado.                                                                      |
+| `400`  | Cloud   | El proyecto no está en estado `en_ejecucion`. Las observaciones solo se crean en proyectos activos.  |
+| `422`  | Proxy   | Validación fallida (descripción < 10 caracteres, etc.). Revisar el payload.                         |
+| `500`  | Bonita  | Falló al instanciar el proceso ObservationsReviewal. La observación fue eliminada (rollback).            |
+| `500`  | Proxy   | Bonita instanció pero no se pudo actualizar con metadata. Ver logs para detalles.                    |
+
+---
+
+## 8️⃣ Resolver Observación ejecutando SolveObservation
+
+| Propiedad     | Valor                                                        |
+| ------------- | ------------------------------------------------------------ |
+| **Método**    | `POST`                                                       |
+| **Ruta**      | `/api/v1/observaciones/{observacion_id}/resolve`            |
+| **Auth**      | JWT Cloud (`Bearer`)                                         |
+| **HTTP 200**  | Tarea humana `SolveObservation` completada + observación actualizada a `resuelta` |
+
+### Precondiciones
+
+- La observación existe en Cloud API y pertenece al proyecto del usuario ejecutor.
+- La observación tiene `bonita_case_id` asociado (se creó con el endpoint 7️⃣).
+- El usuario autenticado es el ejecutor del proyecto (validado por Cloud API).
+- El payload incluye `respuesta` (mínimo 10 caracteres).
+
+### Flujo detallado
+
+1. **Lectura Cloud API** (`GET /api/v1/observaciones/{id}`): obtener `proyecto_id` y `bonita_case_id`.
+2. **Resolver en Cloud API** (`POST /api/v1/observaciones/{id}/resolve`): persiste la respuesta y marca estado `resuelta` o `resuelta_vencida`.
+3. **Bonita:** buscar tarea pendiente `SolveObservation` con filtro por nombre y *fallback* sin filtro (matching por `name` o `displayName`).
+4. **Asignación:** si la tarea no está asignada, se asigna al usuario Bonita autenticado.
+5. **Ejecución tarea:** enviar contrato plano `{ "respuesta": "<texto>" }`.
+6. **Esperar conectores:** `await asyncio.sleep(2)` para que Bonita propague cambios a Cloud API.
+7. **Sync final:** `GET /api/v1/observaciones/{id}` en Cloud API y devolver la entidad actualizada.
+8. **Cleanup:** cierre de clientes httpx (`aclose()`).
+
+```
+Frontend ──POST /observaciones/{id}/resolve──► Proxy
+Proxy ──GET /api/v1/observaciones/{id}──► Cloud API (obtiene bonita_case_id)
+Proxy ──POST /api/v1/observaciones/{id}/resolve──► Cloud API (persiste respuesta)
+Proxy ──/API/bpm/humanTask (SolveObservation)──► Bonita (fallback sin filtro)
+Proxy ──POST /API/bpm/userTask/{taskId}/execution──► Bonita ({"respuesta": ...})
+Proxy ◄─GET /api/v1/observaciones/{id}── Cloud API (estado final)
+Proxy ◄─200 + observación resuelta── Frontend
+```
+
+### Request Body (`ObservacionResolveRequest`)
+
+```json
+{
+  "respuesta": "Se ajustaron los montos de materiales según la observación del consejo."
+}
+```
+
+### Respuesta 200 (`ObservacionResponse`)
+
+```json
+{
+  "id": "623e4567-e89b-12d3-a456-426614174555",
+  "proyecto_id": "123e4567-e89b-12d3-a456-426614174000",
+  "council_user_id": "550e8400-e29b-41d4-a716-446655440003",
+  "descripcion": "Se observa que el presupuesto destinado a materiales no incluye costos de transporte...",
+  "estado": "resuelta",
+  "fecha_limite": "2025-12-20",
+  "respuesta": "Se incorporaron costos de transporte y se actualizó el presupuesto.",
+  "fecha_resolucion": "2025-12-17T18:02:11Z",
+  "created_at": "2025-12-15T10:00:00Z",
+  "updated_at": "2025-12-17T18:02:11Z",
+  "bonita_case_id": "8065",
+  "bonita_process_instance_id": 8065
+}
+```
+
+### Errores frecuentes
+
+| Código | Origen  | Descripción                                                                                             |
+| ------ | ------- | ------------------------------------------------------------------------------------------------------- |
+| `400`  | Proxy   | La observación no tiene `bonita_case_id` o falta `proyecto_id` para contextualizar el proceso.          |
+| `401`  | Cloud   | Token inválido o ausente.                                                                               |
+| `404`  | Cloud   | Observación inexistente.                                                                                |
+| `404`  | Bonita  | No hay tarea pendiente `SolveObservation` para ese `caseId` (ya tomada o no generada).                  |
+| `500`  | Bonita  | Falló la ejecución de la tarea (contrato inválido o sesión).                                            |
+| `500`  | Proxy   | Bonita ejecutó la tarea pero no se pudo leer la observación actualizada (revisar logs de Cloud API).    |
 
 ---
 

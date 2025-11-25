@@ -20,11 +20,11 @@ class BonitaClient:
     - Must be used as async context manager or manually closed.
     """
 
-    def __init__(self, timeout: float = 20.0):
+    def __init__(self, timeout: float = 20.0, process_name: Optional[str] = None):
         self.base_url = settings.BONITA_URL.rstrip("/")
         self.username = settings.BONITA_USERNAME
         self.password = settings.BONITA_PASSWORD
-        self.process_name = settings.BONITA_PROCESS_NAME
+        self.process_name = process_name or settings.BONITA_PROCESS_NAME
 
         # Persist connection + cookies across requests
         self.client = httpx.AsyncClient(timeout=timeout, follow_redirects=True)

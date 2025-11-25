@@ -58,7 +58,8 @@ class MetricsCommitmentsResponse(BaseModel):
     ofertas_aceptadas: int
     ofertas_pendientes: int
     tasa_aceptacion_porcentaje: float
-    tiempo_respuesta_promedio_dias: float
+    # Puede venir null cuando no hay datos históricos suficientes
+    tiempo_respuesta_promedio_dias: Optional[float] = None
     top_contribuidores: List[MetricsCommitmentContributor]
     valor_total_solicitado: float
     valor_total_comprometido: float
