@@ -1,6 +1,6 @@
 {
   "proyecto": {
-    "id": "3910af1d-db20-4a67-af63-2075114efe85",
+    "id": "bfdd59c5-ada7-4a1c-98cd-0217274e0238",
     "titulo": "Centro Comunitario Testeable",
     "descripcion": "Centro comunitario con sal\u00f3n multiuso y cocina para 250 familias. Proyecto de demostraci\u00f3n para testing.",
     "tipo": "Infraestructura Social",
@@ -9,25 +9,25 @@
     "ciudad": "La Plata",
     "barrio": "Barrio Norte Test",
     "estado": "pendiente",
-    "bonita_case_id": "9009",
+    "bonita_case_id": "10001",
     "bonita_process_instance_id": 0,
-    "created_at": "2025-11-25T19:16:02.820998Z",
-    "updated_at": "2025-11-25T19:16:02.820998Z",
+    "created_at": "2025-11-26T17:27:53.080577Z",
+    "updated_at": "2025-11-26T17:27:53.080577Z",
     "etapas": [
       {
-        "id": "c015c54a-d32a-4bda-91be-9523a7e74a3c",
+        "id": "2e68675c-a0f0-48fa-8951-4f221caa3658",
         "nombre": "Fundaciones y Estructura",
         "descripcion": "Excavaci\u00f3n, cimientos y estructura de hormig\u00f3n armado para la base del centro",
-        "fecha_inicio": "2025-11-25",
-        "fecha_fin": "2026-02-23",
-        "proyecto_id": "3910af1d-db20-4a67-af63-2075114efe85",
+        "fecha_inicio": "2025-11-26",
+        "fecha_fin": "2026-02-24",
+        "proyecto_id": "bfdd59c5-ada7-4a1c-98cd-0217274e0238",
         "estado": "pendiente",
         "bonita_case_id": null,
         "bonita_process_instance_id": null,
         "fecha_completitud": null,
         "pedidos": [
           {
-            "id": "e5b8f274-7a42-41dc-8d6a-996219ec06e8",
+            "id": "1e9d7002-b484-46d6-abcf-90eb724fe62c",
             "tipo": "economico",
             "descripcion": "Cemento, hierro, arena y piedra para cimientos",
             "estado": "PENDIENTE",
@@ -35,7 +35,7 @@
             "moneda": "ARS",
             "cantidad": null,
             "unidad": null,
-            "etapa_id": "c015c54a-d32a-4bda-91be-9523a7e74a3c",
+            "etapa_id": "2e68675c-a0f0-48fa-8951-4f221caa3658",
             "proyecto_id": null,
             "created_at": null,
             "updated_at": null
@@ -43,19 +43,19 @@
         ]
       },
       {
-        "id": "d2a392d2-457a-4641-9404-6178fff3c679",
+        "id": "df28b2a3-f8fd-4dc8-977a-f08c2789a431",
         "nombre": "Construcci\u00f3n de Paredes y Techo",
         "descripcion": "Levantamiento de paredes de carga, instalaci\u00f3n de techo y aberturas",
-        "fecha_inicio": "2026-02-24",
-        "fecha_fin": "2026-05-24",
-        "proyecto_id": "3910af1d-db20-4a67-af63-2075114efe85",
+        "fecha_inicio": "2026-02-25",
+        "fecha_fin": "2026-05-25",
+        "proyecto_id": "bfdd59c5-ada7-4a1c-98cd-0217274e0238",
         "estado": "pendiente",
         "bonita_case_id": null,
         "bonita_process_instance_id": null,
         "fecha_completitud": null,
         "pedidos": [
           {
-            "id": "524af845-0357-46f8-953b-cf4ba2b383c9",
+            "id": "615fff2e-4763-4626-86e0-5e478943832c",
             "tipo": "economico",
             "descripcion": "Materiales para paredes y techo (ladrillos, cemento, hierro)",
             "estado": "PENDIENTE",
@@ -63,7 +63,7 @@
             "moneda": "ARS",
             "cantidad": null,
             "unidad": null,
-            "etapa_id": "d2a392d2-457a-4641-9404-6178fff3c679",
+            "etapa_id": "df28b2a3-f8fd-4dc8-977a-f08c2789a431",
             "proyecto_id": null,
             "created_at": null,
             "updated_at": null
@@ -72,7 +72,7 @@
       }
     ]
   },
-  "bonita_case_id": "9009",
-  "bonita_process_url": "http://192.168.32.1:8880/bonita/portal/resource/processInstance/9009/content/",
+  "bonita_case_id": "10001",
+  "bonita_process_url": "http://192.168.32.1:8880/bonita/portal/resource/processInstance/10001/content/",
   "message": "Proyecto creado exitosamente e iniciado en Bonita"
 }

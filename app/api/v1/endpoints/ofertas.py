@@ -53,6 +53,15 @@ async def create_oferta_for_pedido(
         if status_code == status.HTTP_201_CREATED and data:
             return OfertaResponse.model_validate(data)
 
+        if status_code == status.HTTP_409_CONFLICT:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_to_detail(
+                    data,
+                    "Ya existe una oferta creada por este usuario para el pedido",
+                ),
+            )
+
         raise HTTPException(
             status_code=status_code,
             detail=_to_detail(data, "Failed to create oferta"),

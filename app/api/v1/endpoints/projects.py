@@ -70,6 +70,9 @@ async def list_projects(
     my_projects: bool = Query(
         False, description="Only show current user's projects (overrides user_id)"
     ),
+    exclude_my_projects: bool = Query(
+        False, description="Exclude projects owned by the current user"
+    ),
     sort_by: Literal["created_at", "updated_at", "titulo"] = Query(
         "created_at", description="Field to sort by"
     ),
@@ -90,6 +93,15 @@ async def list_projects(
             search,
             my_projects,
         )
+
+        if my_projects and exclude_my_projects:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "detail": "my_projects and exclude_my_projects cannot be used together"
+                },
+            )
+
         params = {
             "page": page,
             "page_size": page_size,
@@ -101,6 +113,7 @@ async def list_projects(
             "search": search,
             "user_id": str(user_id) if user_id else None,
             "my_projects": my_projects,
+            "exclude_my_projects": exclude_my_projects,
             "sort_by": sort_by,
             "sort_order": sort_order,
         }

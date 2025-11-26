@@ -1,0 +1,118 @@
+{
+  "projects": [
+    {
+      "name": "Red de Agua Segura",
+      "project_id": "68b72075-175c-4e45-8ccf-313d9c7ac4c7",
+      "bonita_case_id": "10010",
+      "offers": [
+        {
+          "oferta_id": "938fa6da-c93e-45bc-a1e4-b633d513bd50",
+          "pedido_id": "3aa3699b-ed54-461c-807a-c07333e9f476",
+          "pedido_tipo": "economico",
+          "estado": "aceptada",
+          "decision": "accept"
+        },
+        {
+          "oferta_id": "894b440f-dc29-422c-8970-577f009667f1",
+          "pedido_id": "76248124-15b8-4959-8d27-62c096789003",
+          "pedido_tipo": "materiales",
+          "estado": "pendiente",
+          "decision": null
+        }
+      ]
+    },
+    {
+      "name": "Centro de Salud Modular",
+      "project_id": "c7021a23-c14f-4ff3-8c89-c478629a80de",
+      "bonita_case_id": "10011",
+      "offers": [
+        {
+          "oferta_id": "9080a376-6d58-44c7-8d08-0d607c506589",
+          "pedido_id": "0bebd0c7-715d-4075-820d-ae874c5f1cb1",
+          "pedido_tipo": "economico",
+          "estado": "pendiente",
+          "decision": null
+        },
+        {
+          "oferta_id": "f0ba57f4-0df5-4ae9-a45c-f1858cad1184",
+          "pedido_id": "25f18128-e8fe-4fac-8f35-7084e651dbd7",
+          "pedido_tipo": "transporte",
+          "estado": "aceptada",
+          "decision": "accept"
+        }
+      ]
+    }
+  ],
+  "users": {
+    "member_maria": {
+      "email": "maria@barrionorte.org",
+      "label": "Miembro (proyectos/ofertas)",
+      "projects": [
+        "68b72075-175c-4e45-8ccf-313d9c7ac4c7"
+      ],
+      "offers_made": [
+        {
+          "oferta_id": "894b440f-dc29-422c-8970-577f009667f1",
+          "project_id": "68b72075-175c-4e45-8ccf-313d9c7ac4c7",
+          "pedido_id": "76248124-15b8-4959-8d27-62c096789003",
+          "pedido_tipo": "materiales"
+        },
+        {
+          "oferta_id": "9080a376-6d58-44c7-8d08-0d607c506589",
+          "project_id": "c7021a23-c14f-4ff3-8c89-c478629a80de",
+          "pedido_id": "0bebd0c7-715d-4075-820d-ae874c5f1cb1",
+          "pedido_tipo": "economico"
+        }
+      ],
+      "offers_evaluated": []
+    },
+    "member_pedro": {
+      "email": "pedro@desarrollo.org",
+      "label": "Miembro (proyectos/ofertas)",
+      "projects": [
+        "c7021a23-c14f-4ff3-8c89-c478629a80de"
+      ],
+      "offers_made": [
+        {
+          "oferta_id": "938fa6da-c93e-45bc-a1e4-b633d513bd50",
+          "project_id": "68b72075-175c-4e45-8ccf-313d9c7ac4c7",
+          "pedido_id": "3aa3699b-ed54-461c-807a-c07333e9f476",
+          "pedido_tipo": "economico"
+        },
+        {
+          "oferta_id": "f0ba57f4-0df5-4ae9-a45c-f1858cad1184",
+          "project_id": "c7021a23-c14f-4ff3-8c89-c478629a80de",
+          "pedido_id": "25f18128-e8fe-4fac-8f35-7084e651dbd7",
+          "pedido_tipo": "transporte"
+        }
+      ],
+      "offers_evaluated": []
+    },
+    "council_carlos": {
+      "email": "consejo@rednacional.org",
+      "label": "Council (aprobaciones/observaciones)",
+      "projects": [],
+      "offers_made": [],
+      "offers_evaluated": [
+        {
+          "oferta_id": "938fa6da-c93e-45bc-a1e4-b633d513bd50",
+          "project_id": "68b72075-175c-4e45-8ccf-313d9c7ac4c7",
+          "decision": "accept"
+        }
+      ]
+    },
+    "council_ana": {
+      "email": "auditoria@rednacional.org",
+      "label": "Council (auditor\u00eda/observaciones)",
+      "projects": [],
+      "offers_made": [],
+      "offers_evaluated": [
+        {
+          "oferta_id": "f0ba57f4-0df5-4ae9-a45c-f1858cad1184",
+          "project_id": "c7021a23-c14f-4ff3-8c89-c478629a80de",
+          "decision": "accept"
+        }
+      ]
+    }
+  }
+}

@@ -685,6 +685,7 @@ Lista proyectos con paginación, filtros combinables y ordenamiento dinámico. R
 | `search`     | string  | Búsqueda texto libre en `titulo` y `descripcion` (case-insensitive).                         |
 | `user_id`    | UUID    | Filtra por dueño específico. Ignorado si `my_projects=true`.                                 |
 | `my_projects`| bool    | Si es `true`, solo retorna proyectos del usuario autenticado (sobrescribe `user_id`).        |
+| `exclude_my_projects` | bool | Si es `true`, excluye los proyectos del usuario autenticado (ignorado si `my_projects=true`). |
 
 #### Query Parameters (Ordenamiento)
 
@@ -707,6 +708,9 @@ GET /api/v1/projects?estado=en_ejecucion&provincia=Buenos Aires
 
 # Búsqueda por texto y paginada
 GET /api/v1/projects?search=huerta&page=2&page_size=10&sort_by=titulo&sort_order=asc
+
+# Explorar proyectos de otros usuarios
+GET /api/v1/projects?estado=pendiente&exclude_my_projects=true
 ```
 
 #### Response Exitoso (200)
@@ -756,6 +760,7 @@ GET /api/v1/projects?search=huerta&page=2&page_size=10&sort_by=titulo&sort_order
 | ------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`                                                                                   | Proporciona un access_token válido en el header          |
 | `422`  | Parámetros inválidos      | `{"detail": "Invalid estado value: borrador. Must be one of: pendiente, en_ejecucion, finalizado"}`                        | Usa valores permitidos para `estado`, `sort_by`, etc.    |
+| `422`  | Filtros incompatibles     | `{"detail": "my_projects and exclude_my_projects cannot both be true"}`                                                    | Usa solo uno de los flags `my_projects` / `exclude_my_projects`. |
 
 #### Instrucciones para Probar
 
@@ -1644,6 +1649,7 @@ Obtiene todos los pedidos de un proyecto con filtrado opcional por estado.
 **Ruta:** `/api/v1/projects/{project_id}/pedidos`
 **Autenticación:** Requerida (Bearer Token)
 **Código de Respuesta:** `200 OK`
+**Notas:** El campo `ya_oferto` indica si el usuario autenticado ya envió una oferta para ese pedido.
 
 #### Path Parameters
 
@@ -1678,7 +1684,8 @@ GET /api/v1/projects/123e4567-e89b-12d3-a456-426614174000/pedidos?estado=COMPLET
 		"monto": 15000.0,
 		"moneda": "ARS",
 		"cantidad": null,
-		"unidad": null
+		"unidad": null,
+		"ya_oferto": false
 	},
 	{
 		"id": "423e4567-e89b-12d3-a456-426614174334",
@@ -1689,7 +1696,8 @@ GET /api/v1/projects/123e4567-e89b-12d3-a456-426614174000/pedidos?estado=COMPLET
 		"monto": null,
 		"moneda": null,
 		"cantidad": 5,
-		"unidad": "jornadas"
+		"unidad": "jornadas",
+		"ya_oferto": true
 	}
 ]
 ```
@@ -1832,6 +1840,7 @@ Crea una nueva oferta para un pedido específico. Un usuario propone sus servici
 | ------ | ------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------- |
 | `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`                                                                 | Proporciona un access_token válido     |
 | `404`  | Pedido no encontrado      | `{"detail": "Pedido with id ... not found"}`                                                             | Verifica que el pedido_id sea correcto |
+| `409`  | Oferta duplicada          | `{"detail": "You have already submitted an oferta for this pedido."}`                                    | Evita enviar más de una oferta por pedido |
 | `422`  | Validación fallida        | `{"detail": [{"loc": ["body", "descripcion"], "msg": "field required", "type": "value_error.missing"}]}` | La descripción es requerida            |
 
 #### Instrucciones para Probar
@@ -2416,6 +2425,14 @@ curl -X GET "https://project-planning-cloud-api.onrender.com/api/v1/ofertas/mis-
 ## Endpoints de Observaciones
 
 El módulo de **observaciones** permite al consejo directivo realizar seguimiento y control de proyectos en ejecución. Los miembros del consejo pueden crear observaciones que deben ser resueltas por los ejecutores de proyecto dentro de 5 días, con marcado automático como vencidas si no se resuelven a tiempo.
+
+**Rutas principales**
+- `POST /api/v1/projects/{project_id}/observaciones`: crear observación para un proyecto en ejecución
+- `GET /api/v1/projects/{project_id}/observaciones`: listar observaciones de un proyecto
+- `GET /api/v1/observaciones`: listado global con filtros
+- `PATCH /api/v1/observaciones/{observacion_id}`: actualizar metadatos (no resolver)
+- `POST /api/v1/observaciones/{observacion_id}/resolve`: resolver una observación
+- `POST /api/v1/observaciones/{observacion_id}/expire`: marcar como vencida
 
 ### 1️⃣ Crear Observación para Proyecto
 
@@ -3802,6 +3819,9 @@ Estadísticas globales del sistema para alimentar el dashboard principal.
 - Conteo de proyectos por estado (`pendiente`, `en_ejecucion`, `finalizado`)
 - Totales generales (proyectos creados, activos y listos para iniciar)
 - `tasa_exito`: porcentaje de proyectos finalizados sobre el total
+- `proyectos_en_riesgo`: proyectos con etapas vencidas (fecha_fin < hoy)
+- `velocidad_completacion`: promedio de proyectos completados por semana
+- `observaciones_vencidas_total`: total de observaciones vencidas en el sistema
 
 #### Response Exitoso (200)
 
@@ -3815,7 +3835,10 @@ Estadísticas globales del sistema para alimentar el dashboard principal.
 	"total_proyectos": 6,
 	"proyectos_activos": 3,
 	"proyectos_listos_para_iniciar": 1,
-	"tasa_exito": 16.67
+	"tasa_exito": 16.67,
+	"proyectos_en_riesgo": 1,
+	"velocidad_completacion": 0.25,
+	"observaciones_vencidas_total": 2
 }
 ```
 
@@ -3860,6 +3883,8 @@ Muestra todas las métricas operativas de un proyecto (progreso, pedidos, observ
 - Cantidad de pedidos completados/pendientes
 - Observaciones por estado (pendientes, resueltas, vencidas)
 - Indicador `puede_iniciar` (todos los pedidos completados)
+- `estado_salud`: indicador de riesgo ("en_tiempo", "retrasado", "completado")
+- `dias_restantes`: días hasta la fecha límite (negativo si vencida)
 
 #### Response Exitoso (200)
 
@@ -3877,7 +3902,9 @@ Muestra todas las métricas operativas de un proyecto (progreso, pedidos, observ
 			"pedidos_pendientes": 1,
 			"progreso_porcentaje": 66.67,
 			"dias_planificados": 45,
-			"dias_transcurridos": 30
+			"dias_transcurridos": 30,
+			"estado_salud": "en_tiempo",
+			"dias_restantes": 15
 		}
 	],
 	"total_pedidos": 5,
@@ -3921,11 +3948,11 @@ Analiza la participación de la red en la cobertura de pedidos.
 
 #### Métricas incluidas
 
-- Cobertura de ofertas y tasa de aceptación
-- Distribución de ofertas por estado
+- Cobertura de ofertas y tasa de aceptación general
+- **Distribución de pedidos por tipo** (economico, materiales, mano_obra, transporte, equipamiento)
+- **Cobertura por tipo**: % de pedidos de cada tipo que tienen oferta
 - Tiempo promedio de respuesta de la comunidad
-- Top 5 contribuidores con más ofertas/aceptaciones
-- Totales monetarios: solicitado vs comprometido
+- Top 5 contribuidores por tasa de aceptación
 
 #### Response Exitoso (200)
 
@@ -3934,9 +3961,6 @@ Analiza la participación de la red en la cobertura de pedidos.
 	"total_pedidos": 12,
 	"pedidos_con_ofertas": 9,
 	"cobertura_ofertas_porcentaje": 75.0,
-	"total_ofertas": 18,
-	"ofertas_aceptadas": 6,
-	"ofertas_pendientes": 9,
 	"tasa_aceptacion_porcentaje": 33.33,
 	"tiempo_respuesta_promedio_dias": 2.5,
 	"top_contribuidores": [
@@ -3945,13 +3969,21 @@ Analiza la participación de la red en la cobertura de pedidos.
 			"nombre": "Lucía",
 			"apellido": "Gómez",
 			"ong": "Construcciones Solidarias",
-			"ofertas_realizadas": 7,
-			"ofertas_aceptadas": 3,
 			"tasa_aceptacion": 42.86
 		}
 	],
-	"valor_total_solicitado": 500000.0,
-	"valor_total_comprometido": 360000.0
+	"pedidos_por_tipo": {
+		"economico": 5,
+		"materiales": 4,
+		"mano_obra": 2,
+		"transporte": 1
+	},
+	"cobertura_por_tipo": {
+		"economico": 80.0,
+		"materiales": 75.0,
+		"mano_obra": 50.0,
+		"transporte": 100.0
+	}
 }
 ```
 
@@ -3983,8 +4015,12 @@ Indicadores transversales de eficiencia del proceso (tiempos, observaciones, pro
 
 #### Métricas incluidas
 
-- Tiempo promedio por etapa y desde creación hasta inicio de proyecto
-- Cantidad de proyectos pendientes por más de 30 días
+- Tiempo promedio por etapa (en días y semanas)
+- Tiempo desde creación hasta inicio de proyecto
+- Proyectos pendientes por más de 30 días
+- **Tasa de cumplimiento de observaciones**: % de observaciones resueltas
+- **Tiempo promedio de respuesta en pedidos**: promedio de días para completar un pedido
+- **Distribución de pedidos por tipo**: conteo de pedidos en cada categoría
 - Estado de observaciones (total, resueltas, pendientes, vencidas)
 - Tiempo promedio de resolución de observaciones
 
@@ -3993,13 +4029,22 @@ Indicadores transversales de eficiencia del proceso (tiempos, observaciones, pro
 ```json
 {
 	"tiempo_promedio_etapa_dias": 45.5,
+	"semanas_promedio_etapa": 6.5,
 	"tiempo_inicio_promedio_dias": 12.3,
 	"proyectos_pendientes_mas_30_dias": 3,
 	"observaciones_total": 20,
 	"observaciones_resueltas": 12,
 	"observaciones_pendientes": 6,
 	"observaciones_vencidas": 2,
-	"tiempo_resolucion_observaciones_promedio_dias": 4.2
+	"tiempo_resolucion_observaciones_promedio_dias": 4.2,
+	"tasa_cumplimiento_observaciones": 60.0,
+	"tiempo_respuesta_promedio_pedido_dias": 8.5,
+	"distribucion_pedidos_por_tipo": {
+		"economico": 8,
+		"materiales": 7,
+		"mano_obra": 3,
+		"transporte": 2
+	}
 }
 ```
 
@@ -4486,6 +4531,7 @@ Esta sección describe **todos los códigos de error posibles** que la API puede
 | ------ | ------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`                                                                 |
 | `404`  | Pedido no encontrado      | `{"detail": "Pedido with id ... not found"}`                                                             |
+| `409`  | Oferta duplicada          | `{"detail": "You have already submitted an oferta for this pedido."}`                                    |
 | `422`  | Validación Pydantic       | `{"detail": [{"loc": ["body", "descripcion"], "msg": "field required", "type": "value_error.missing"}]}` |
 
 ##### GET /api/v1/pedidos/{pedido_id}/ofertas
@@ -4754,6 +4800,188 @@ curl -X POST https://project-planning-cloud-api.onrender.com/api/v1/auth/login \
 -   **Swagger Interactivo:** https://project-planning-cloud-api.onrender.com/docs
 -   **Health Check:** https://project-planning-cloud-api.onrender.com/health
 -   **OpenAPI JSON:** https://project-planning-cloud-api.onrender.com/openapi.json
+
+---
+
+# Actualización: Mejoras en Métricas y Timestamps (26 Nov 2025)
+
+## Resumen de Cambios
+
+Se han realizado mejoras significativas al sistema de métricas y rastreo de estado del proyecto para proporcionar datos más precisos y confiables.
+
+### 1. Nuevos Campos de Timestamp en Modelos
+
+#### **Pedido Model**
+Se agregaron 4 campos de timestamp para rastrear el ciclo de vida completo de un pedido:
+
+```python
+created_at: datetime              # Cuándo fue creado el pedido
+updated_at: datetime              # Última actualización
+fecha_comprometido: datetime      # Cuándo se aceptó la primera oferta
+fecha_completado: datetime        # Cuándo se completó el pedido
+```
+
+**Automáticamente seteados por:**
+- `created_at`: Por la BD al insertar (server_default=func.now())
+- `fecha_comprometido`: Cuando se acepta una oferta en `/api/v1/ofertas/{oferta_id}/accept`
+- `fecha_completado`: Cuando se confirma realización en `/api/v1/ofertas/{oferta_id}/confirmar-realizacion`
+
+#### **Etapa Model**
+Se agregaron 4 campos de timestamp para rastrear etapas:
+
+```python
+created_at: datetime              # Cuándo fue creada la etapa
+updated_at: datetime              # Última actualización
+fecha_en_ejecucion: datetime      # Cuándo comenzó la ejecución
+fecha_financiada: datetime        # Cuándo se financiaron todos los pedidos
+```
+
+**Automáticamente seteados por:**
+- `created_at`: Por la BD al insertar (server_default=func.now())
+- `fecha_en_ejecucion`: Cuando se llama a `POST /api/v1/etapas/{etapa_id}/start`
+- `fecha_financiada`: Automáticamente cuando todos los pedidos están COMPLETADO (en `refresh_etapa_state`)
+
+#### **Proyecto Model**
+Se agregaron 2 campos de timestamp para rastrear ciclo del proyecto:
+
+```python
+fecha_en_ejecucion: datetime      # Cuándo inició la ejecución
+fecha_finalizado: datetime        # Cuándo se finalizó el proyecto
+```
+
+**Automáticamente seteados por:**
+- `fecha_en_ejecucion`: Cuando se llama a `POST /api/v1/projects/{id}/start`
+- `fecha_finalizado`: Cuando se llama a `POST /api/v1/projects/{id}/complete`
+
+### 2. Bugs Críticos Corregidos
+
+#### **Bug de Enum Comparisons**
+✅ Arreglado: Todas las comparaciones enum en `metrics_service.py` ahora usan directamente el enum en lugar de `.value`
+
+```python
+# ANTES (INCORRECTO)
+where(Proyecto.estado == EstadoProyecto.pendiente.value)  # Comparaba string vs enum
+
+# AHORA (CORRECTO)
+where(Proyecto.estado == EstadoProyecto.pendiente)        # Comparación enum vs enum
+```
+
+#### **Cálculo de Proyectos Atascados**
+✅ Arreglado: Se movió toda la lógica al SQL para evitar problemas de timezone
+
+```python
+# ANTES: Mezclaba Python datetime con epoch de BD
+thirty_days_ago = datetime.now(timezone.utc).timestamp() - (30 * 86400)
+where(func.extract("epoch", Proyecto.created_at) < thirty_days_ago)
+
+# AHORA: Todo en Python, comparación directa
+thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+where(Proyecto.created_at < thirty_days_ago)
+```
+
+### 3. Tipos de Datos en Schemas
+
+✅ Mejorado: Los campos `estado` en schemas ahora usan tipos `Enum` en lugar de `str`
+
+```python
+# ANTES
+class EtapaTracking(BaseModel):
+    estado: str  # Vulnerable a valores inválidos
+
+# AHORA
+class EtapaTracking(BaseModel):
+    estado: EstadoEtapa  # Type-safe con validación automática
+```
+
+### 4. Authorization Checks
+
+✅ Agregado: El endpoint `/api/v1/metrics/projects/{project_id}/tracking` ahora verifica que el usuario sea dueño del proyecto
+
+```python
+# Validación agregada
+if project_owner_id != current_user.id:
+    raise HTTPException(403, "You do not have permission to access this project")
+```
+
+### 5. Métricas Mejoradas
+
+#### **`tiempo_respuesta_promedio_dias` (CommitmentMetrics)**
+- **Antes:** Siempre `None` (Pedido no tenía timestamps)
+- **Ahora:** Se puede calcular como `oferta.created_at - pedido.created_at`
+- **Nota:** Este campo sigue siendo `Optional[float]` porque depende de si hay ofertas con datos
+
+#### **`tiempo_inicio_promedio_dias` (PerformanceMetrics)**
+- **Antes:** Calculado aproximadamente usando `updated_at`
+- **Ahora:** Calcula exactamente usando el nuevo campo `fecha_en_ejecucion`
+- **Fórmula:** `avg(fecha_en_ejecucion - created_at) para proyectos con fecha_en_ejecucion`
+
+#### **Cálculo de Observaciones Vencidas**
+- **Mejorado:** Se calcula en tiempo real (no depende de un estado desincronizado)
+- **Lógica:** `pendiente AND fecha_limite < hoy`
+
+### 6. Documentación de Campos Optional
+
+Los siguientes campos en métricas pueden ser `None` en circunstancias específicas:
+
+| Métrica | Puede ser None | Razón |
+|---------|---|---|
+| `tiempo_promedio_etapa_dias` | Sí | Si no hay etapas en BD |
+| `tiempo_inicio_promedio_dias` | Sí | Si no hay proyectos que hayan iniciado ejecución |
+| `tiempo_resolucion_observaciones_promedio_dias` | Sí | Si no hay observaciones resueltas |
+| `tiempo_respuesta_promedio_dias` | Sí | Si no hay ofertas en BD |
+| `dias_transcurridos` (en EtapaTracking) | Sí | Si proyecto está en estado `pendiente` |
+
+### 7. Migraciones de Base de Datos
+
+Se crearon 3 migraciones Alembic:
+
+1. **`a1b2c3d4e5f6`** - Añade timestamps a tabla `pedidos`
+   - `created_at`, `updated_at`, `fecha_comprometido`, `fecha_completado`
+
+2. **`b2c3d4e5f6a7`** - Añade timestamps a tabla `etapas`
+   - `created_at`, `updated_at`, `fecha_en_ejecucion`, `fecha_financiada`
+
+3. **`c3d4e5f6a7b8`** - Añade timestamps a tabla `proyectos`
+   - `fecha_en_ejecucion`, `fecha_finalizado`
+
+**Aplicar migraciones:**
+```bash
+uv run alembic upgrade head
+```
+
+### 8. Impacto en Endpoints Existentes
+
+#### Endpoints Sin Cambios en Funcionalidad
+- Todos los endpoints devuelven la misma estructura
+- Los nuevos campos de timestamp se propagan automáticamente
+- El cliente puede ignorar los nuevos campos si no los necesita
+
+#### Endpoints con Cambios de Comportamiento
+- **`POST /api/v1/projects/{id}/start`** - Ahora setea `fecha_en_ejecucion`
+- **`POST /api/v1/projects/{id}/complete`** - Ahora setea `fecha_finalizado`
+- **`POST /api/v1/etapas/{id}/start`** - Ahora setea `fecha_en_ejecucion`
+- **`GET /api/v1/metrics/projects/{id}/tracking`** - Ahora requiere ownership del proyecto (403 si no eres dueño)
+
+### 9. Ejemplo de Datos Completos Ahora Disponibles
+
+Ciclo completo de un pedido:
+
+```json
+{
+  "id": "uuid",
+  "created_at": "2024-11-20T10:00:00Z",  // Creado
+  "updated_at": "2024-11-26T15:30:00Z",  // Última actualización
+  "estado": "COMPLETADO",
+  "fecha_comprometido": "2024-11-22T14:15:00Z",  // Oferta aceptada
+  "fecha_completado": "2024-11-25T18:45:00Z"     // Confirmada realización
+}
+```
+
+Tiempo total del ciclo: 5 días, 8 horas, 45 minutos
+
+### 10. Validación de Datos
+
+Todos los timestamps incluyen información de timezone (UTC) y se almacenan como `DateTime(timezone=True)` en PostgreSQL para máxima precisión.
 
 ---
 

@@ -12,6 +12,9 @@ class MetricsDashboardResponse(BaseModel):
     proyectos_activos: int
     proyectos_listos_para_iniciar: int
     tasa_exito: float
+    proyectos_en_riesgo: int
+    velocidad_completacion: float
+    observaciones_vencidas_total: int
 
 
 class MetricsProjectStageStatus(BaseModel):
@@ -22,7 +25,9 @@ class MetricsProjectStageStatus(BaseModel):
     pedidos_pendientes: int
     progreso_porcentaje: float
     dias_planificados: int
-    dias_transcurridos: int
+    dias_transcurridos: Optional[int] = None
+    estado_salud: str
+    dias_restantes: Optional[int] = None
 
 
 class MetricsProjectTrackingResponse(BaseModel):
@@ -45,8 +50,6 @@ class MetricsCommitmentContributor(BaseModel):
     nombre: str
     apellido: str
     ong: str
-    ofertas_realizadas: int
-    ofertas_aceptadas: int
     tasa_aceptacion: float
 
 
@@ -54,23 +57,23 @@ class MetricsCommitmentsResponse(BaseModel):
     total_pedidos: int
     pedidos_con_ofertas: int
     cobertura_ofertas_porcentaje: float
-    total_ofertas: int
-    ofertas_aceptadas: int
-    ofertas_pendientes: int
     tasa_aceptacion_porcentaje: float
-    # Puede venir null cuando no hay datos históricos suficientes
     tiempo_respuesta_promedio_dias: Optional[float] = None
     top_contribuidores: List[MetricsCommitmentContributor]
-    valor_total_solicitado: float
-    valor_total_comprometido: float
+    pedidos_por_tipo: Dict[str, int]
+    cobertura_por_tipo: Dict[str, float]
 
 
 class MetricsPerformanceResponse(BaseModel):
     tiempo_promedio_etapa_dias: float
-    tiempo_inicio_promedio_dias: float
+    semanas_promedio_etapa: float
+    tiempo_inicio_promedio_dias: Optional[float] = None
     proyectos_pendientes_mas_30_dias: int
     observaciones_total: int
     observaciones_resueltas: int
     observaciones_pendientes: int
     observaciones_vencidas: int
     tiempo_resolucion_observaciones_promedio_dias: float
+    tasa_cumplimiento_observaciones: float
+    tiempo_respuesta_promedio_pedido_dias: float
+    distribucion_pedidos_por_tipo: Dict[str, int]

@@ -74,6 +74,7 @@ class PedidoResponse(BaseModel):
     moneda: Optional[str] = None
     cantidad: Optional[int] = None
     unidad: Optional[str] = None
+    ya_oferto: Optional[bool] = None
     etapa_id: UUID
     proyecto_id: Optional[UUID] = None
     created_at: Optional[datetime] = None
