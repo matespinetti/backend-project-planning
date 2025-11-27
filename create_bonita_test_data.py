@@ -56,6 +56,8 @@ EXISTING_USERS = {
     },
 }
 
+ACTIVE_MEMBER_USERS = ("member_maria", "member_pedro")
+
 
 class ProxyAPIClient:
     """Async client for the Proxy API (coordinating Cloud API + Bonita)."""
@@ -371,9 +373,10 @@ async def main():
     }
 
     try:
-        # Authenticate all users we need
-        logger.info("Authenticating existing users...")
-        for user_key, data in EXISTING_USERS.items():
+        # Authenticate only member users (council users remain listed but unused in seed)
+        logger.info("Authenticating member users...")
+        for user_key in ACTIVE_MEMBER_USERS:
+            data = EXISTING_USERS[user_key]
             ok = await clients[user_key].login(email=data["email"], password=data["password"])
             if not ok:
                 raise RuntimeError(f"Authentication failed for {data['email']}")
@@ -442,7 +445,7 @@ async def main():
                         "descripcion": "Financio 60% perforación y bomba con entrega en 10 días",
                         "monto": 132000.0,
                         "decision": "accept",
-                        "decider": "council_carlos",
+                        "decider": "member_maria",
                     },
                     {
                         "pedido_index": 1,
@@ -517,7 +520,7 @@ async def main():
                         "descripcion": "Logística de transporte de módulos en 3 viajes",
                         "monto": None,
                         "decision": "accept",
-                        "decider": "council_ana",
+                        "decider": "member_pedro",
                     },
                 ],
             },
