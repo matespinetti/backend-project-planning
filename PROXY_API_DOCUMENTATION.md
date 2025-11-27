@@ -738,6 +738,7 @@ Proxy ◄─200 + observación resuelta── Frontend
 - `/api/v1/projects`: nuevo filtro `exclude_my_projects` (no combinar con `my_projects`; el proxy devuelve 400 si se usan juntos). Útil para explorar proyectos de otros.
 - `/api/v1/projects/{id}` y `/projects/{id}/pedidos`: los pedidos pueden venir con `ya_oferto` (bool) indicando si el usuario autenticado ya hizo una oferta; el proxy lo expone en el schema.
 - `/pedidos/{id}/ofertas`: el proxy ahora propaga `409 Conflict` cuando el usuario intenta duplicar una oferta sobre el mismo pedido.
+- Ofertas incluyen `fecha_resolucion` (datetime, opcional) en las respuestas; refleja cuándo se aceptó/rechazó.
 
 Para depuración, revisar los logs del proxy: cada paso critica (persistencia, inicio de proceso, ejecución de tarea) registra `logger.info`/`logger.error` con IDs de proyecto/oferta/case para correlacionar eventos en Cloud API y Bonita.
 

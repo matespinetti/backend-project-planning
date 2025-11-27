@@ -26,6 +26,7 @@
 17. [Flujo Completo de Ejemplo](#flujo-completo-de-ejemplo)
 18. [Códigos de Error](#códigos-de-error)
 19. [Instrucciones para Pruebas](#instrucciones-para-pruebas)
+20. [Endpoint de Seed](#endpoint-de-seed)
 
 ---
 
@@ -1649,7 +1650,7 @@ Obtiene todos los pedidos de un proyecto con filtrado opcional por estado.
 **Ruta:** `/api/v1/projects/{project_id}/pedidos`
 **Autenticación:** Requerida (Bearer Token)
 **Código de Respuesta:** `200 OK`
-**Notas:** El campo `ya_oferto` indica si el usuario autenticado ya envió una oferta para ese pedido.
+**Notas:** El campo `ya_oferto` indica si el usuario autenticado tiene una oferta **pendiente** para ese pedido.
 
 #### Path Parameters
 
@@ -1829,6 +1830,7 @@ Crea una nueva oferta para un pedido específico. Un usuario propone sus servici
 	"descripcion": "Tengo disponibilidad inmediata para realizar trabajos de pintura con materiales de primera calidad. Garantizo buen acabado y entrega a tiempo.",
 	"monto_ofrecido": 14500.0,
 	"estado": "pendiente",
+	"fecha_resolucion": null,
 	"created_at": "2024-10-22T15:00:00+00:00",
 	"updated_at": "2024-10-22T15:00:00+00:00"
 }
@@ -1840,7 +1842,7 @@ Crea una nueva oferta para un pedido específico. Un usuario propone sus servici
 | ------ | ------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------- |
 | `401`  | Token inválido o faltante | `{"detail": "Invalid or expired token"}`                                                                 | Proporciona un access_token válido     |
 | `404`  | Pedido no encontrado      | `{"detail": "Pedido with id ... not found"}`                                                             | Verifica que el pedido_id sea correcto |
-| `409`  | Oferta duplicada          | `{"detail": "You have already submitted an oferta for this pedido."}`                                    | Evita enviar más de una oferta por pedido |
+| `409`  | Oferta pendiente duplicada| `{"detail": "You have already submitted an oferta for this pedido."}`                                    | No envíes más de una oferta pendiente para el mismo pedido |
 | `422`  | Validación fallida        | `{"detail": [{"loc": ["body", "descripcion"], "msg": "field required", "type": "value_error.missing"}]}` | La descripción es requerida            |
 
 #### Instrucciones para Probar
@@ -4906,9 +4908,12 @@ if project_owner_id != current_user.id:
 ### 5. Métricas Mejoradas
 
 #### **`tiempo_respuesta_promedio_dias` (CommitmentMetrics)**
-- **Antes:** Siempre `None` (Pedido no tenía timestamps)
-- **Ahora:** Se puede calcular como `oferta.created_at - pedido.created_at`
-- **Nota:** Este campo sigue siendo `Optional[float]` porque depende de si hay ofertas con datos
+- **Antes:** Siempre `None` (no se calculaba)
+- **Ahora:** `avg(first_oferta.created_at - pedido.created_at)` usando la primera oferta de cada pedido
+- **Nota:** Sigue siendo `Optional[float]` si no hay ofertas en BD
+
+#### **Campo nuevo en Ofertas**
+- `fecha_resolucion`: fecha/hora en que la oferta fue aceptada o rechazada (UTC). Se setea en los endpoints de aceptación/rechazo y queda `null` mientras está `pendiente`.
 
 #### **`tiempo_inicio_promedio_dias` (PerformanceMetrics)**
 - **Antes:** Calculado aproximadamente usando `updated_at`
@@ -4982,6 +4987,40 @@ Tiempo total del ciclo: 5 días, 8 horas, 45 minutos
 ### 10. Validación de Datos
 
 Todos los timestamps incluyen información de timezone (UTC) y se almacenan como `DateTime(timezone=True)` en PostgreSQL para máxima precisión.
+
+
+---
+
+## Endpoint de Seed
+
+Endpoint utilitario para poblar la base de datos con los datos de ejemplo provistos en `seed_data.py`. **No requiere autenticación**.
+
+**Método:** `POST`  
+**Ruta:** `/api/v1/seed`  
+**Autenticación:** No requerida  
+**Código de Respuesta:** `200 OK`
+
+#### Ejemplo de Uso
+
+```
+POST /api/v1/seed
+```
+
+**Response 200**
+
+```json
+{
+	"detail": "Database seeded successfully"
+}
+```
+
+#### Errores Posibles
+
+| Código | Descripción            | Ejemplo                                                 | Solución                  |
+| ------ | ---------------------- | ------------------------------------------------------- | ------------------------- |
+| `500`  | Error al correr seed   | `{"detail": "Internal Server Error"}`                   | Revisar logs del servidor |
+
+> Advertencia: al ser público y sin autenticación, evita exponer este endpoint en entornos productivos sin protección adicional.
 
 ---
 

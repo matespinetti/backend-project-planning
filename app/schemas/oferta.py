@@ -59,6 +59,7 @@ class OfertaResponse(BaseModel):
     descripcion: str
     monto_ofrecido: Optional[float] = None
     estado: str
+    fecha_resolucion: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     user: Optional[OfertaUserSummary] = None
